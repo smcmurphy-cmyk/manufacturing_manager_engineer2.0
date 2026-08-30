@@ -1,0 +1,6 @@
+{
+  "name": "Dynamic Engineering Operations",
+  "description": "Manufacturing operations management system with Compliance Tracker, Workforce Competency, Data Ingestion, and Asset Maintenance modules.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
