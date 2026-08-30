@@ -13,8 +13,10 @@ import { ComplianceTracker } from './components/modules/ComplianceTracker';
 import { TrainingTracker } from './components/modules/TrainingTracker';
 import { DataIngestion } from './components/modules/DataIngestion';
 import { AssetMaintenance } from './components/modules/AssetMaintenance';
+import { QuarterlyReporting } from './components/modules/QuarterlyReporting';
 import { AlertsModal } from './components/modals/AlertsModal';
 import { MarkdownExportModal } from './components/modals/MarkdownExportModal';
+import { buildLiveQ3QuarterlyDocuments } from './utils/quarterlyData';
 
 export default function App() {
   const [activeModule, setActiveModule] = useState<ActiveModule>('compliance');
@@ -183,6 +185,8 @@ export default function App() {
     return diff <= 14;
   }).length;
 
+  const quarterlyDocsCount = buildLiveQ3QuarterlyDocuments(ncrs, audits, training, jobs, assets).length;
+
   const totalAlertCount = expiringTrainingCount + calAlertsCount;
 
   return (
@@ -195,6 +199,7 @@ export default function App() {
         expiringCertsCount={expiringTrainingCount}
         activeJobsCount={activeJobsCount}
         calAlertsCount={calAlertsCount}
+        quarterlyDocsCount={quarterlyDocsCount}
         isOpen={sidebarOpen}
         onToggleOpen={() => setSidebarOpen(!sidebarOpen)}
       />
@@ -249,6 +254,17 @@ export default function App() {
               onUpdateAsset={handleUpdateAsset}
               onRecalibrate={handleRecalibrateAsset}
               onOpenAlertModal={() => setIsAlertModalOpen(true)}
+            />
+          )}
+
+          {activeModule === 'quarterly-reporting' && (
+            <QuarterlyReporting
+              ncrs={ncrs}
+              audits={audits}
+              training={training}
+              jobs={jobs}
+              assets={assets}
+              onNavigateModule={(mod) => setActiveModule(mod as ActiveModule)}
             />
           )}
         </main>

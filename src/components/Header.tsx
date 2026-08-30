@@ -53,6 +53,12 @@ export const Header: React.FC<HeaderProps> = ({
           code: 'Module 04 • Metrology, Thermal Profiles & ANSI/ESD S20.20',
           description: 'Equipment calibration intervals, oven profiling schedules, Outlook alerts & calendar sync',
         };
+      case 'quarterly-reporting':
+        return {
+          title: 'Executive Quarterly Operations & Compliance Dossier',
+          code: 'Module 05 • Q3 FY2026 (Jul 1 – Sep 30) • AS9100D & ISO 9001',
+          description: 'Aggregated documents from Modules 1–4 (Opened, Closed, Active, Completed) & ZIP archival engine',
+        };
     }
   };
 

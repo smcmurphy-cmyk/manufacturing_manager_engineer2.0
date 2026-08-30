@@ -1,4 +1,4 @@
-export type ActiveModule = 'compliance' | 'training' | 'data-ingestion' | 'asset-maintenance';
+export type ActiveModule = 'compliance' | 'training' | 'data-ingestion' | 'asset-maintenance' | 'quarterly-reporting';
 
 export interface SystemConfig {
   organization: string;
@@ -7,6 +7,39 @@ export interface SystemConfig {
   qmsStandards: string[];
   ipcStandards: string[];
   storageRoot: string;
+}
+
+// Quarterly Reporting Types
+export type QuarterId = '2026-Q3' | '2026-Q2' | '2026-Q1' | '2025-Q4';
+
+export interface QuarterPeriod {
+  id: QuarterId;
+  label: string;
+  financialQuarter: string;
+  startDate: string;
+  endDate: string;
+  isCurrent: boolean;
+  totalDocuments?: number;
+}
+
+export type DocumentLifecycleStatus = 'Opened in Quarter' | 'Closed / Completed' | 'Still Active / In-Flight' | 'Action Required / Overdue';
+
+export interface QuarterlyDocumentItem {
+  id: string;
+  documentNumber: string;
+  title: string;
+  moduleSource: 'Module 1: Compliance' | 'Module 2: Training' | 'Module 3: FAI Jobs' | 'Module 4: Assets';
+  moduleKey: 'compliance' | 'training' | 'data-ingestion' | 'asset-maintenance';
+  standardClause: string;
+  dateOpened: string;
+  dateResolved?: string;
+  lifecycleStatus: DocumentLifecycleStatus;
+  nativeStatus: string;
+  ownerOrLead: string;
+  criticality: 'High' | 'Medium' | 'Low' | 'Critical (Class 3)' | 'Major (Class 2)' | 'Minor';
+  details: string;
+  departmentOrLocation: string;
+  rawData?: any;
 }
 
 // Module 1: Compliance & Non-Conformance Tracker

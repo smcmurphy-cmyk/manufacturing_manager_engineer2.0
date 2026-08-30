@@ -10,7 +10,9 @@ import {
   AlertTriangle,
   Menu,
   X,
-  Factory
+  Factory,
+  FileSpreadsheet,
+  Archive
 } from 'lucide-react';
 import { ActiveModule } from '../types';
 
@@ -21,6 +23,7 @@ interface SidebarProps {
   expiringCertsCount: number;
   activeJobsCount: number;
   calAlertsCount: number;
+  quarterlyDocsCount?: number;
   isOpen: boolean;
   onToggleOpen: () => void;
 }
@@ -32,6 +35,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   expiringCertsCount,
   activeJobsCount,
   calAlertsCount,
+  quarterlyDocsCount,
   isOpen,
   onToggleOpen,
 }) => {
@@ -67,6 +71,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Wrench,
       badge: calAlertsCount > 0 ? `${calAlertsCount} Due` : undefined,
       badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
+    },
+    {
+      id: 'quarterly-reporting' as ActiveModule,
+      name: 'Quarterly Reporting',
+      subtitle: 'Q3 (Jul 1 - Sep 30) • ZIP Archive',
+      icon: FileSpreadsheet,
+      badge: quarterlyDocsCount !== undefined ? `${quarterlyDocsCount} Docs` : 'Q3 Active',
+      badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-300',
     },
   ];
 
