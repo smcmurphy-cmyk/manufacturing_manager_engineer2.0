@@ -88,7 +88,7 @@ async function startServer() {
       hostname: os.hostname(),
       appDirectory: process.cwd(),
       commonPaths: isWindows
-        ? ['C:\\Reports\\FAI_Records', 'D:\\Quality_Logs\\FAI', '.\\saved_reports\\fai']
+        ? ['C:\\Reports\\FAI_Records', 'C:\\Reports\\Quality_Logs\\FAI', 'C:\\Reports\\saved_reports\\fai']
         : ['/var/log/fai-reports', '/opt/factory/fai_archive', './saved_reports/fai'],
     });
   });
