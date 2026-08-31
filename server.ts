@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { createServer as createViteServer } from 'vite';
 
 interface ArchiveLogItem {
@@ -84,7 +85,7 @@ async function startServer() {
     res.json({
       defaultStorageDir: defaultSuggested,
       platform: process.platform,
-      hostname: require('os').hostname(),
+      hostname: os.hostname(),
       appDirectory: process.cwd(),
       commonPaths: isWindows
         ? ['C:\\Reports\\FAI_Records', 'D:\\Quality_Logs\\FAI', '.\\saved_reports\\fai']
