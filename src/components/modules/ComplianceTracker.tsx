@@ -37,6 +37,7 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
   // Form state for new NCR
   const [newNcr, setNewNcr] = useState<{
     ncrNumber: string;
+    serialNumber: string;
     assemblyPartNumber: string;
     assemblyRevision: string;
     defectDescription: string;
@@ -47,6 +48,7 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
     nextAction: string;
   }>({
     ncrNumber: `NCR-2026-0${ncrs.length + 43}`,
+    serialNumber: '',
     assemblyPartNumber: 'PCA-8840-MCU',
     assemblyRevision: 'Rev D',
     defectDescription: '',
@@ -58,10 +60,17 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
   });
 
   const filteredNcrs = ncrs.filter((ncr) => {
+    const term = searchTerm.toLowerCase().trim();
     const matchesSearch =
-      ncr.ncrNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ncr.assemblyPartNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ncr.defectDescription.toLowerCase().includes(searchTerm.toLowerCase());
+      !term ||
+      ncr.ncrNumber.toLowerCase().includes(term) ||
+      (ncr.serialNumber && ncr.serialNumber.toLowerCase().includes(term)) ||
+      ncr.assemblyPartNumber.toLowerCase().includes(term) ||
+      ncr.assemblyRevision.toLowerCase().includes(term) ||
+      ncr.defectDescription.toLowerCase().includes(term) ||
+      ncr.standardClause.toLowerCase().includes(term) ||
+      ncr.owner.toLowerCase().includes(term) ||
+      ncr.nextAction.toLowerCase().includes(term);
     const matchesSeverity = severityFilter === 'ALL' || ncr.severity === severityFilter;
     const matchesStatus = statusFilter === 'ALL' || ncr.status === statusFilter;
     return matchesSearch && matchesSeverity && matchesStatus;
@@ -74,6 +83,7 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
     const record: NCRRecord = {
       id: `ncr-${Date.now()}`,
       ncrNumber: newNcr.ncrNumber,
+      serialNumber: newNcr.serialNumber.trim() || undefined,
       assemblyPartNumber: newNcr.assemblyPartNumber,
       assemblyRevision: newNcr.assemblyRevision,
       defectDescription: newNcr.defectDescription,
@@ -90,6 +100,7 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
     setShowAddModal(false);
     setNewNcr({
       ncrNumber: `NCR-2026-0${ncrs.length + 44}`,
+      serialNumber: '',
       assemblyPartNumber: 'PCA-8840-MCU',
       assemblyRevision: 'Rev D',
       defectDescription: '',
@@ -112,12 +123,13 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
     }
   };
 
-  const getStatusBadge = (st: NCRStatus) => {
+  const getStatusBadge = (st: NCRStatus | string) => {
     switch (st) {
       case 'Open':
         return 'bg-rose-50 text-rose-700 border-rose-200';
-      case 'Closed':
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+      case 'Fixed':
+        return 'bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold';
+      case 'In Development':
       case 'In development':
         return 'bg-amber-50 text-amber-700 border-amber-200';
       case 'Scrap':
@@ -152,7 +164,7 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
             <AlertOctagon className="w-4 h-4 text-rose-600" />
           </div>
           <p className="mt-2 text-2xl font-bold text-slate-900">
-            {ncrs.filter((n) => n.status !== 'Closed').length}
+            {ncrs.filter((n) => n.status !== 'Fixed').length}
           </p>
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xs text-rose-600 font-medium">
@@ -168,10 +180,10 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
           type="button"
           onClick={() => {
             setActiveTab('ncrs');
-            setStatusFilter((prev) => (prev === 'In development' && activeTab === 'ncrs' ? 'ALL' : 'In development'));
+            setStatusFilter((prev) => (prev === 'In Development' && activeTab === 'ncrs' ? 'ALL' : 'In Development'));
           }}
           className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
-            activeTab === 'ncrs' && statusFilter === 'In development'
+            activeTab === 'ncrs' && (statusFilter === 'In Development' || statusFilter === 'In development')
               ? 'bg-amber-50/50 border-amber-400 ring-2 ring-amber-500 shadow-xs'
               : 'bg-white border-slate-200 shadow-2xs hover:border-amber-300 hover:shadow-xs'
           }`}
@@ -181,12 +193,12 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
             <Clock className="w-4 h-4 text-amber-600" />
           </div>
           <p className="mt-2 text-2xl font-bold text-slate-900">
-            {ncrs.filter((n) => n.status === 'In development').length}
+            {ncrs.filter((n) => n.status === 'In Development' || n.status === ('In development' as any)).length}
           </p>
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xs text-slate-500">Quarantine lot verification</p>
             <span className="text-[10px] text-amber-700 font-medium">
-              {activeTab === 'ncrs' && statusFilter === 'In development' ? 'Filtered active' : 'Click to filter'}
+              {activeTab === 'ncrs' && (statusFilter === 'In Development' || statusFilter === 'In development') ? 'Filtered active' : 'Click to filter'}
             </span>
           </div>
         </button>
@@ -293,7 +305,7 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                 <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search by NCR #, Part Number, Defect..."
+                  placeholder="Search by Serial # (S/N), NCR #, Part #, Defect..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-sky-500 focus:bg-white"
@@ -319,8 +331,8 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                 >
                   <option value="ALL">All Statuses</option>
                   <option value="Open">Open</option>
-                  <option value="Closed">Closed</option>
-                  <option value="In development">In development</option>
+                  <option value="Fixed">Fixed</option>
+                  <option value="In Development">In Development</option>
                   <option value="Scrap">Scrap</option>
                 </select>
               </div>
@@ -385,7 +397,7 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   <tr>
-                    <th className="py-3 px-3.5">NCR # & Assembly</th>
+                    <th className="py-3 px-3.5">NCR # & Board S/N</th>
                     <th className="py-3 px-3.5">Defect Description</th>
                     <th className="py-3 px-3.5">Standard & Severity</th>
                     <th className="py-3 px-3.5">Analysis & Owner</th>
@@ -398,7 +410,14 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                     <tr key={ncr.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-3.5 align-top font-mono">
                         <span className="font-bold text-slate-900">{ncr.ncrNumber}</span>
-                        <div className="text-[11px] text-slate-600 font-sans mt-0.5">
+                        {ncr.serialNumber ? (
+                          <div className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 bg-sky-50 text-sky-800 text-[10px] font-mono font-semibold rounded border border-sky-200">
+                            <span className="text-sky-500 font-normal">S/N:</span> {ncr.serialNumber}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-slate-400 font-sans italic mt-0.5">No S/N recorded</div>
+                        )}
+                        <div className="text-[11px] text-slate-600 font-sans mt-1">
                           {ncr.assemblyPartNumber} ({ncr.assemblyRevision})
                         </div>
                       </td>
@@ -422,8 +441,8 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                           className={`text-[11px] font-semibold px-2 py-1 rounded border focus:outline-hidden focus:ring-1 focus:ring-sky-500 cursor-pointer ${getStatusBadge(ncr.status)}`}
                         >
                           <option value="Open">Open</option>
-                          <option value="Closed">Closed</option>
-                          <option value="In development">In development</option>
+                          <option value="Fixed">Fixed</option>
+                          <option value="In Development">In Development</option>
                           <option value="Scrap">Scrap</option>
                         </select>
                       </td>
@@ -507,7 +526,7 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
             </div>
 
             <form onSubmit={handleCreateNcr} className="p-4 sm:p-5 space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-medium text-slate-700 mb-1">NCR Number</label>
                   <input
@@ -519,16 +538,29 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Assembly Part # & Rev</label>
+                  <label className="block font-medium text-slate-700 mb-1">
+                    Board Serial Number (S/N)
+                  </label>
                   <input
                     type="text"
-                    value={newNcr.assemblyPartNumber}
-                    onChange={(e) => setNewNcr({ ...newNcr, assemblyPartNumber: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded"
-                    placeholder="e.g. PCA-8840-MCU (Rev D)"
-                    required
+                    value={newNcr.serialNumber}
+                    onChange={(e) => setNewNcr({ ...newNcr, serialNumber: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded font-mono placeholder:font-sans"
+                    placeholder="e.g. SN-8840-0921"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Assembly Part # & Rev</label>
+                <input
+                  type="text"
+                  value={newNcr.assemblyPartNumber}
+                  onChange={(e) => setNewNcr({ ...newNcr, assemblyPartNumber: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded"
+                  placeholder="e.g. PCA-8840-MCU (Rev D)"
+                  required
+                />
               </div>
 
               <div>

@@ -14,15 +14,18 @@ import {
   Clock,
   HardDrive,
   FolderArchive,
-  FileText
+  FileText,
+  Pencil,
 } from 'lucide-react';
 import { DueDateCategory, EngineeringJob, PipelineStatus } from '../../types';
 import { FaiCompletionModal } from '../modals/FaiCompletionModal';
 import { FaiArchiveHistoryModal } from '../modals/FaiArchiveHistoryModal';
+import { FaiEditModal } from '../modals/FaiEditModal';
 
 interface DataIngestionProps {
   jobs: EngineeringJob[];
   onAddJob: (job: EngineeringJob) => void;
+  onUpdateJob?: (job: EngineeringJob) => void;
   onToggleCheck: (jobId: string, checkKey: keyof EngineeringJob['checks']) => void;
   onUpdatePassedTest?: (jobId: string, passedTest: 'Yes' | 'No', testDate?: string) => void;
   onUpdatePassedQa?: (jobId: string, passedQa: 'Yes' | 'No', qaDate?: string) => void;
@@ -33,6 +36,7 @@ interface DataIngestionProps {
 export const DataIngestion: React.FC<DataIngestionProps> = ({
   jobs,
   onAddJob,
+  onUpdateJob,
   onToggleCheck,
   onUpdatePassedTest,
   onUpdatePassedQa,
@@ -41,6 +45,7 @@ export const DataIngestion: React.FC<DataIngestionProps> = ({
 }) => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedJobForCompletion, setSelectedJobForCompletion] = useState<EngineeringJob | null>(null);
+  const [selectedJobForEdit, setSelectedJobForEdit] = useState<EngineeringJob | null>(null);
   const [showArchiveHistoryModal, setShowArchiveHistoryModal] = useState(false);
 
   const [newJob, setNewJob] = useState<{
@@ -86,7 +91,7 @@ export const DataIngestion: React.FC<DataIngestionProps> = ({
       passedTestDate: newJob.passedTestDate,
       passedQa: newJob.passedQa,
       passedQaDate: newJob.passedQaDate,
-      status: 'Draft',
+      status: 'Edit',
       checks: {
         xyOdb: true,
         stencilBotTop: false,
@@ -104,8 +109,9 @@ export const DataIngestion: React.FC<DataIngestionProps> = ({
 
   const getStatusBadge = (status: PipelineStatus) => {
     switch (status) {
-      case 'Draft':
-        return 'bg-slate-100 text-slate-700 border-slate-200';
+      case 'Edit':
+      case 'Draft' as any:
+        return 'bg-amber-50 text-amber-800 border-amber-300 font-semibold';
       case 'Validation Complete':
         return 'bg-sky-100 text-sky-800 border-sky-300';
       case 'Dispatched to Line':
@@ -239,10 +245,34 @@ export const DataIngestion: React.FC<DataIngestionProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${getStatusBadge(job.status)}`}>
-                    {job.status === 'Dispatched to Line' ? `${job.jobId} Logged` : job.status}
-                  </span>
+                <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                  {/* Status Badge - Change Draft to Edit with direct click-to-edit action */}
+                  {job.status === 'Edit' || (job.status as string) === 'Draft' ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedJobForEdit(job)}
+                      title="Document in Edit mode — Click to modify FAI parameters"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full border bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 transition-colors shadow-2xs cursor-pointer"
+                    >
+                      <Pencil className="w-3 h-3 text-amber-700" />
+                      <span>Edit</span>
+                    </button>
+                  ) : (
+                    <span className={`px-2.5 py-1 text-xs font-semibold rounded-full border ${getStatusBadge(job.status)}`}>
+                      {job.status === 'Dispatched to Line' ? `${job.jobId} Logged` : job.status}
+                    </span>
+                  )}
+
+                  {/* Dedicated Edit FAI Form Action Button */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedJobForEdit(job)}
+                    title="Edit FAI Form / Document Details"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <Pencil className="w-3 h-3 text-sky-600" />
+                    <span>Edit Form</span>
+                  </button>
                 </div>
               </div>
 
@@ -630,6 +660,16 @@ export const DataIngestion: React.FC<DataIngestionProps> = ({
           </div>
         </div>
       )}
+
+      {/* Edit FAI Form & Quality Parameters Modal */}
+      <FaiEditModal
+        isOpen={Boolean(selectedJobForEdit)}
+        job={selectedJobForEdit}
+        onClose={() => setSelectedJobForEdit(null)}
+        onSaveJob={(updatedJob) => {
+          onUpdateJob?.(updatedJob);
+        }}
+      />
 
       {/* Log FAI Build Completion & Server Archiving Modal */}
       <FaiCompletionModal

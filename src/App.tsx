@@ -87,7 +87,7 @@ export default function App() {
         return {
           ...j,
           checks: updatedChecks,
-          status: allPassed && j.status === 'Draft' ? 'Validation Complete' : (j.status === 'Validation Complete' && !allPassed ? 'Draft' : j.status),
+          status: allPassed && (j.status === 'Edit' || (j.status as string) === 'Draft') ? 'Validation Complete' : (j.status === 'Validation Complete' && !allPassed ? 'Edit' : j.status),
         };
       })
     );
@@ -108,7 +108,7 @@ export default function App() {
         const allPassed = allChecks && testPassed && qaPassed;
         return {
           ...updated,
-          status: allPassed && updated.status === 'Draft' ? 'Validation Complete' : (updated.status === 'Validation Complete' && !allPassed ? 'Draft' : updated.status),
+          status: allPassed && (updated.status === 'Edit' || (updated.status as string) === 'Draft') ? 'Validation Complete' : (updated.status === 'Validation Complete' && !allPassed ? 'Edit' : updated.status),
         };
       })
     );
@@ -129,10 +129,14 @@ export default function App() {
         const allPassed = allChecks && testPassed && qaPassed;
         return {
           ...updated,
-          status: allPassed && updated.status === 'Draft' ? 'Validation Complete' : (updated.status === 'Validation Complete' && !allPassed ? 'Draft' : updated.status),
+          status: allPassed && (updated.status === 'Edit' || (updated.status as string) === 'Draft') ? 'Validation Complete' : (updated.status === 'Validation Complete' && !allPassed ? 'Edit' : updated.status),
         };
       })
     );
+  };
+
+  const handleUpdateJob = (updatedJob: EngineeringJob) => {
+    setJobs(jobs.map((j) => (j.id === updatedJob.id ? updatedJob : j)));
   };
 
   const handleUpdateJobStatus = (jobId: string, status: EngineeringJob['status']) => {
@@ -239,6 +243,7 @@ export default function App() {
             <DataIngestion
               jobs={jobs}
               onAddJob={handleAddJob}
+              onUpdateJob={handleUpdateJob}
               onToggleCheck={handleToggleCheck}
               onUpdatePassedTest={handleUpdatePassedTest}
               onUpdatePassedQa={handleUpdatePassedQa}

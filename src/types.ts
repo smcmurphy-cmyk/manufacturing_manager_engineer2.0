@@ -43,12 +43,13 @@ export interface QuarterlyDocumentItem {
 }
 
 // Module 1: Compliance & Non-Conformance Tracker
-export type NCRStatus = 'Open' | 'Closed' | 'In development' | 'Scrap';
+export type NCRStatus = 'Open' | 'Fixed' | 'In Development' | 'Scrap';
 export type SeverityLevel = 'Critical (Class 3)' | 'Major (Class 2)' | 'Minor';
 
 export interface NCRRecord {
   id: string;
   ncrNumber: string;
+  serialNumber?: string;
   assemblyPartNumber: string;
   assemblyRevision: string;
   defectDescription: string;
@@ -90,7 +91,7 @@ export interface TrainingRecord {
 }
 
 // Module 3: FAI validation & Logging
-export type PipelineStatus = 'Draft' | 'Validation Complete' | 'Dispatched to Line' | 'Hold';
+export type PipelineStatus = 'Edit' | 'Draft' | 'Validation Complete' | 'Dispatched to Line' | 'Hold';
 export type DueDateCategory = 'ASAP' | 'Development' | 'Stock';
 
 export interface EngineeringJob {

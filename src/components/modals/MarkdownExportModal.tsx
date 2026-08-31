@@ -67,9 +67,9 @@ ${training.map((t) => `| ${t.operatorName} | ${t.certificationTitle} | ${t.stand
         return `# AS9100D / ISO 9001 Compliance & Management Reporting Timelines
 
 ## Non-Conformance Reports (NCR)
-| NCR ID | Assembly / Part # | Defect Description | Standard & Severity | Status | Next Action |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-${ncrs.map((n) => `| \`${n.ncrNumber}\` | ${n.assemblyPartNumber} (${n.assemblyRevision}) | ${n.defectDescription} | ${n.standardClause} (${n.severity}) | ${n.status} | ${n.nextAction} |`).join('\n')}
+| NCR ID | Serial # | Assembly / Part # | Defect Description | Standard & Severity | Status | Next Action |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+${ncrs.map((n) => `| \`${n.ncrNumber}\` | ${n.serialNumber ? `\`${n.serialNumber}\`` : 'N/A'} | ${n.assemblyPartNumber} (${n.assemblyRevision}) | ${n.defectDescription} | ${n.standardClause} (${n.severity}) | ${n.status} | ${n.nextAction} |`).join('\n')}
 
 ## QMS Audit Cadence
 | Audit / Review Event | Standard Clause Ref | Cadence | Last Completed | Next Due Date | Lead Auditor |

@@ -30,7 +30,7 @@ export function buildLiveQ3QuarterlyDocuments(
   // 1. Module 1: Compliance - NCRs
   ncrs.forEach((ncr) => {
     let lifecycle: QuarterlyDocumentItem['lifecycleStatus'] = 'Still Active / In-Flight';
-    if (ncr.status === 'Closed') {
+    if (ncr.status === 'Fixed' || (ncr.status as string) === 'Closed') {
       lifecycle = 'Closed / Completed';
     } else if (ncr.status === 'Open' || ncr.status === 'Scrap') {
       lifecycle = 'Action Required / Overdue';
@@ -41,18 +41,18 @@ export function buildLiveQ3QuarterlyDocuments(
     items.push({
       id: `live-${ncr.id}`,
       documentNumber: ncr.ncrNumber,
-      title: `${ncr.assemblyPartNumber} (${ncr.assemblyRevision}): ${ncr.defectDescription}`,
+      title: `${ncr.assemblyPartNumber} (${ncr.assemblyRevision})${ncr.serialNumber ? ` [S/N: ${ncr.serialNumber}]` : ''}: ${ncr.defectDescription}`,
       moduleSource: 'Module 1: Compliance',
       moduleKey: 'compliance',
       standardClause: ncr.standardClause,
       dateOpened: ncr.containmentDate,
-      dateResolved: ncr.status === 'Closed' ? '2026-08-14' : undefined,
+      dateResolved: ncr.status === 'Fixed' || (ncr.status as string) === 'Closed' ? '2026-08-14' : undefined,
       lifecycleStatus: lifecycle,
       nativeStatus: ncr.status,
       ownerOrLead: `${ncr.owner} (Containment: ${ncr.rootCauseMethod})`,
       criticality: ncr.severity,
       details: ncr.nextAction,
-      departmentOrLocation: `Part: ${ncr.assemblyPartNumber} / Quality Containment Cell`,
+      departmentOrLocation: `Part: ${ncr.assemblyPartNumber}${ncr.serialNumber ? ` | S/N: ${ncr.serialNumber}` : ''} / Quality Containment Cell`,
       rawData: ncr,
     });
   });
