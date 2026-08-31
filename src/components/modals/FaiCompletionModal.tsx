@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EngineeringJob } from '../../types';
 import { generateFaiCompletionPdf } from '../../utils/faiPdfGenerator';
+import { APP_PATHS } from '../../config/paths';
 import {
   FileText,
   FolderTree,
@@ -86,11 +87,13 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
           setServerPath(storedPath);
         } else if (info.defaultStorageDir) {
           setServerPath(info.defaultStorageDir);
+        } else {
+          setServerPath(APP_PATHS.FAI_REPORTS);
         }
       })
       .catch(() => {
         const storedPath = localStorage.getItem('fai_custom_server_path');
-        setServerPath(storedPath || './saved_reports/fai');
+        setServerPath(storedPath || APP_PATHS.FAI_REPORTS);
       });
   }, [isOpen, job]);
 
@@ -146,7 +149,13 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
       });
 
       // 3. Extract binary base64
-      const pdfBase64 = pdfDoc.output('datauristring');
+      // jsPDF output('datauristring') produces "data:application/pdf;filename=generated.pdf;base64,JVBERi..."
+      // or output('datauristring') / output('arraybuffer')
+      // Let's generate both datauristring and pure base64
+      let pdfBase64 = pdfDoc.output('datauristring');
+      
+      // Verification log as requested: Log the first 50 chars of pdfBase64
+      console.log('PDF Base64 Prefix (first 50 chars):', pdfBase64.substring(0, 50));
 
       // 4. Send to server backend to save directly on host disk
       const response = await fetch('/api/fai/save-pdf', {
@@ -398,7 +407,7 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
                       setServerPath(e.target.value);
                       setVerificationResult(null);
                     }}
-                    placeholder="/var/log/fai-reports/ or C:\Reports\FAI_Records"
+                    placeholder={APP_PATHS.FAI_REPORTS}
                     className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-sky-500"
                     required
                   />

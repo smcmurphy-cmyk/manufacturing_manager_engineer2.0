@@ -21,7 +21,12 @@ interface ArchiveLogItem {
   status: string;
 }
 
-const DEFAULT_STORAGE_DIR = process.env.FAI_STORAGE_DIR || path.join(process.cwd(), 'saved_reports', 'fai');
+const BASE_REPORTS_DIR = process.env.REPORTS_OUTPUT_DIR || 'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports';
+const DEFAULT_STORAGE_DIR =
+  process.env.FAI_STORAGE_DIR ||
+  (process.env.REPORTS_OUTPUT_DIR
+    ? path.join(process.env.REPORTS_OUTPUT_DIR, 'FAI')
+    : path.join(process.cwd(), 'saved_reports', 'fai'));
 const LOG_FILE_PATH = path.join(process.cwd(), 'saved_reports', 'fai_archive_log.json');
 
 function ensureDirectoryExistence(filePath: string) {
@@ -84,12 +89,24 @@ async function startServer() {
 
     res.json({
       defaultStorageDir: defaultSuggested,
+      baseReportsDir: BASE_REPORTS_DIR,
       platform: process.platform,
       hostname: os.hostname(),
       appDirectory: process.cwd(),
       commonPaths: isWindows
-        ? ['C:\\Reports\\FAI_Records', 'D:\\Quality_Logs\\FAI', '.\\saved_reports\\fai']
-        : ['/var/log/fai-reports', '/opt/factory/fai_archive', './saved_reports/fai'],
+        ? [
+            `${BASE_REPORTS_DIR}\\FAI`,
+            BASE_REPORTS_DIR,
+            'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\FAI',
+            'C:\\Reports\\FAI_Records',
+            '.\\saved_reports\\fai',
+          ]
+        : [
+            `${BASE_REPORTS_DIR}/FAI`,
+            '/var/log/fai-reports',
+            '/opt/factory/fai_archive',
+            './saved_reports/fai',
+          ],
     });
   });
 
@@ -162,9 +179,15 @@ async function startServer() {
       const finalFilePath = path.join(targetDir, safeFileName);
 
       // Convert base64 data to binary buffer
-      // Handle data URL prefix if present
-      const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
-      const buffer = Buffer.from(cleanBase64, 'base64');
+      // Handle data URL prefix variants from jsPDF (e.g. data:application/pdf;filename=...;base64, or data:application/pdf;base64,)
+      let cleanBase64 = pdfBase64;
+      if (cleanBase64.includes(';base64,')) {
+        cleanBase64 = cleanBase64.split(';base64,')[1];
+      } else if (cleanBase64.startsWith('data:')) {
+        cleanBase64 = cleanBase64.replace(/^data:[^,]+,/, '');
+      }
+      
+      const buffer = Buffer.from(cleanBase64.trim(), 'base64');
 
       // Write file to host disk
       fs.writeFileSync(finalFilePath, buffer);
