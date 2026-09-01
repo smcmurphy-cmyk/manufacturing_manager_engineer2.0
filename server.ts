@@ -121,6 +121,46 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// Reusable helper for file operations and base64 PDF persistence
+const savePdfToFileSystem = (
+  baseDir: string,
+  serverPath: string | undefined,
+  fileName: string,
+  pdfBase64: string
+) => {
+  // Determine target directory
+  const targetDir =
+    serverPath && serverPath.trim() !== ''
+      ? path.isAbsolute(serverPath.trim())
+        ? path.normalize(serverPath.trim())
+        : path.resolve(process.cwd(), serverPath.trim())
+      : baseDir;
+
+  // Ensure directory exists
+  if (!fs.existsSync(targetDir)) {
+    fs.mkdirSync(targetDir, { recursive: true });
+  }
+
+  // Clean file name
+  const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '_');
+  const finalFilePath = path.join(targetDir, safeFileName);
+
+  // Clean base64 buffer (strips headers if present)
+  let cleanBase64 = pdfBase64;
+  if (cleanBase64.includes(';base64,')) {
+    cleanBase64 = cleanBase64.split(';base64,')[1];
+  } else if (cleanBase64.startsWith('data:')) {
+    cleanBase64 = cleanBase64.replace(/^data:[^,]+,/, '');
+  }
+
+  // Write file
+  const buffer = Buffer.from(cleanBase64.trim(), 'base64');
+  fs.writeFileSync(finalFilePath, buffer);
+  const fileStats = fs.statSync(finalFilePath);
+
+  return { finalFilePath, safeFileName, size: fileStats.size, targetDir };
+};
+
 async function startServer() {
   const app = express();
   const PORT = 3000;
@@ -218,36 +258,9 @@ async function startServer() {
         });
       }
 
-      // Determine target destination folder
-      const targetDir = serverPath && serverPath.trim() !== ''
-        ? (path.isAbsolute(serverPath.trim()) ? path.normalize(serverPath.trim()) : path.resolve(process.cwd(), serverPath.trim()))
-        : DEFAULT_STORAGE_DIR;
-
-      // Ensure directory exists
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-
-      // Clean file name
-      const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '_');
-      const finalFilePath = path.join(targetDir, safeFileName);
-
-      // Convert base64 data to binary buffer
-      // Handle data URL prefix variants from jsPDF (e.g. data:application/pdf;filename=...;base64, or data:application/pdf;base64,)
-      let cleanBase64 = pdfBase64;
-      if (cleanBase64.includes(';base64,')) {
-        cleanBase64 = cleanBase64.split(';base64,')[1];
-      } else if (cleanBase64.startsWith('data:')) {
-        cleanBase64 = cleanBase64.replace(/^data:[^,]+,/, '');
-      }
-      
-      const buffer = Buffer.from(cleanBase64.trim(), 'base64');
-
-      // Write file to host disk
-      fs.writeFileSync(finalFilePath, buffer);
-
-      const fileStats = fs.statSync(finalFilePath);
-      const formattedSize = formatBytes(fileStats.size);
+      // Save PDF to filesystem using shared helper
+      const saved = savePdfToFileSystem(DEFAULT_STORAGE_DIR, serverPath, fileName, pdfBase64);
+      const formattedSize = formatBytes(saved.size);
 
       // Record to archive audit history log
       const history = loadArchiveLog();
@@ -258,10 +271,10 @@ async function startServer() {
         revision: jobData?.revision || 'Rev 1.0',
         customer: jobData?.customer,
         totalBuildTimeHours: jobData?.totalBuildTimeHours,
-        serverPath: targetDir,
-        fileName: safeFileName,
-        fullPath: finalFilePath,
-        fileSizeBytes: fileStats.size,
+        serverPath: saved.targetDir,
+        fileName: saved.safeFileName,
+        fullPath: saved.finalFilePath,
+        fileSizeBytes: saved.size,
         fileSizeFormatted: formattedSize,
         operatorName,
         loggedAt: new Date().toISOString(),
@@ -275,8 +288,8 @@ async function startServer() {
         success: true,
         message: 'FAI completion PDF saved successfully to host server',
         record: newRecord,
-        savedPath: finalFilePath,
-        fileName: safeFileName,
+        savedPath: saved.finalFilePath,
+        fileName: saved.safeFileName,
         fileSize: formattedSize,
         timestamp: newRecord.loggedAt,
       });
@@ -355,33 +368,9 @@ async function startServer() {
         });
       }
 
-      // Determine target destination folder
-      const targetDir = serverPath && serverPath.trim() !== ''
-        ? (path.isAbsolute(serverPath.trim()) ? path.normalize(serverPath.trim()) : path.resolve(process.cwd(), serverPath.trim()))
-        : DEFAULT_AUDIT_STORAGE_DIR;
-
-      // Ensure directory exists
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-
-      // Clean file name
-      const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '_');
-      const finalFilePath = path.join(targetDir, safeFileName);
-
-      // Clean base64 buffer
-      let cleanBase64 = pdfBase64;
-      if (cleanBase64.includes(';base64,')) {
-        cleanBase64 = cleanBase64.split(';base64,')[1];
-      } else if (cleanBase64.startsWith('data:')) {
-        cleanBase64 = cleanBase64.replace(/^data:[^,]+,/, '');
-      }
-
-      const buffer = Buffer.from(cleanBase64.trim(), 'base64');
-      fs.writeFileSync(finalFilePath, buffer);
-
-      const fileStats = fs.statSync(finalFilePath);
-      const formattedSize = formatBytes(fileStats.size);
+      // Save PDF to filesystem using shared helper
+      const saved = savePdfToFileSystem(DEFAULT_AUDIT_STORAGE_DIR, serverPath, fileName, pdfBase64);
+      const formattedSize = formatBytes(saved.size);
 
       // Record to audit archive log
       const history = loadAuditArchiveLog();
@@ -392,10 +381,10 @@ async function startServer() {
         standard: auditData?.standard || 'AS9100D',
         cadence: auditData?.cadence,
         status: auditData?.status || 'Compliant',
-        serverPath: targetDir,
-        fileName: safeFileName,
-        fullPath: finalFilePath,
-        fileSizeBytes: fileStats.size,
+        serverPath: saved.targetDir,
+        fileName: saved.safeFileName,
+        fullPath: saved.finalFilePath,
+        fileSizeBytes: saved.size,
         fileSizeFormatted: formattedSize,
         leadAuditor,
         loggedAt: new Date().toISOString(),
@@ -408,8 +397,8 @@ async function startServer() {
         success: true,
         message: 'Audit report PDF saved successfully to host server',
         record: newRecord,
-        savedPath: finalFilePath,
-        fileName: safeFileName,
+        savedPath: saved.finalFilePath,
+        fileName: saved.safeFileName,
         fileSize: formattedSize,
         timestamp: newRecord.loggedAt,
       });
@@ -430,7 +419,6 @@ async function startServer() {
         fileName,
         pdfBase64,
         documentType = 'Report',
-        metadata = {},
       } = req.body;
 
       if (!fileName || !pdfBase64) {
@@ -440,35 +428,15 @@ async function startServer() {
         });
       }
 
-      const targetDir = serverPath && serverPath.trim() !== ''
-        ? (path.isAbsolute(serverPath.trim()) ? path.normalize(serverPath.trim()) : path.resolve(process.cwd(), serverPath.trim()))
-        : path.join(BASE_REPORTS_DIR, documentType);
-
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-
-      const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '_');
-      const finalFilePath = path.join(targetDir, safeFileName);
-
-      let cleanBase64 = pdfBase64;
-      if (cleanBase64.includes(';base64,')) {
-        cleanBase64 = cleanBase64.split(';base64,')[1];
-      } else if (cleanBase64.startsWith('data:')) {
-        cleanBase64 = cleanBase64.replace(/^data:[^,]+,/, '');
-      }
-
-      const buffer = Buffer.from(cleanBase64.trim(), 'base64');
-      fs.writeFileSync(finalFilePath, buffer);
-
-      const fileStats = fs.statSync(finalFilePath);
-      const formattedSize = formatBytes(fileStats.size);
+      const defaultDir = path.join(BASE_REPORTS_DIR, documentType);
+      const saved = savePdfToFileSystem(defaultDir, serverPath, fileName, pdfBase64);
+      const formattedSize = formatBytes(saved.size);
 
       return res.json({
         success: true,
         message: 'Document PDF saved successfully to host server',
-        savedPath: finalFilePath,
-        fileName: safeFileName,
+        savedPath: saved.finalFilePath,
+        fileName: saved.safeFileName,
         fileSize: formattedSize,
         timestamp: new Date().toISOString(),
       });
@@ -529,33 +497,9 @@ async function startServer() {
         });
       }
 
-      // Determine target destination folder
-      const targetDir = serverPath && serverPath.trim() !== ''
-        ? (path.isAbsolute(serverPath.trim()) ? path.normalize(serverPath.trim()) : path.resolve(process.cwd(), serverPath.trim()))
-        : DEFAULT_NCR_STORAGE_DIR;
-
-      // Ensure directory exists
-      if (!fs.existsSync(targetDir)) {
-        fs.mkdirSync(targetDir, { recursive: true });
-      }
-
-      // Clean file name
-      const safeFileName = fileName.replace(/[/\\?%*:|"<>]/g, '_');
-      const finalFilePath = path.join(targetDir, safeFileName);
-
-      // Clean base64 buffer
-      let cleanBase64 = pdfBase64;
-      if (cleanBase64.includes(';base64,')) {
-        cleanBase64 = cleanBase64.split(';base64,')[1];
-      } else if (cleanBase64.startsWith('data:')) {
-        cleanBase64 = cleanBase64.replace(/^data:[^,]+,/, '');
-      }
-
-      const buffer = Buffer.from(cleanBase64.trim(), 'base64');
-      fs.writeFileSync(finalFilePath, buffer);
-
-      const fileStats = fs.statSync(finalFilePath);
-      const formattedSize = formatBytes(fileStats.size);
+      // Save PDF to filesystem using shared helper
+      const saved = savePdfToFileSystem(DEFAULT_NCR_STORAGE_DIR, serverPath, fileName, pdfBase64);
+      const formattedSize = formatBytes(saved.size);
 
       // Record to NCR archive log
       const history = loadNcrArchiveLog();
@@ -568,10 +512,10 @@ async function startServer() {
         assemblyRevision: ncrData?.assemblyRevision || 'N/A',
         severity: ncrData?.severity || 'Major',
         status: ncrData?.status || 'Open',
-        serverPath: targetDir,
-        fileName: safeFileName,
-        fullPath: finalFilePath,
-        fileSizeBytes: fileStats.size,
+        serverPath: saved.targetDir,
+        fileName: saved.safeFileName,
+        fullPath: saved.finalFilePath,
+        fileSizeBytes: saved.size,
         fileSizeFormatted: formattedSize,
         editor,
         lastEditedAt: ncrData?.lastEditedAt || new Date().toISOString(),
@@ -585,8 +529,8 @@ async function startServer() {
         success: true,
         message: 'NCR report PDF saved successfully to host server',
         record: newRecord,
-        savedPath: finalFilePath,
-        fileName: safeFileName,
+        savedPath: saved.finalFilePath,
+        fileName: saved.safeFileName,
         fileSize: formattedSize,
         timestamp: newRecord.loggedAt,
       });

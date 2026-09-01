@@ -204,7 +204,7 @@ export default function App() {
   };
 
   // Compute Badge Counters
-  const activeNcrCount = ncrs.filter((n) => n.status !== 'Closed').length;
+  const activeNcrCount = ncrs.filter((n) => n.status === 'Open' || n.status === 'In Development').length;
 
   const today = new Date('2026-08-30');
   const expiringTrainingCount = training.filter((t) => {

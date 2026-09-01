@@ -111,6 +111,7 @@ export interface TrainingRecord {
   expirationDate: string;
   status: CertStatus;
   contactEmail: string;
+  supervisor?: string;
   notes?: string;
 }
 
