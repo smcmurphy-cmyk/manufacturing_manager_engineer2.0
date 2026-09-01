@@ -46,6 +46,14 @@ export interface QuarterlyDocumentItem {
 export type NCRStatus = 'Open' | 'Fixed' | 'In Development' | 'Scrap';
 export type SeverityLevel = 'Critical (Class 3)' | 'Major (Class 2)' | 'Minor';
 
+export interface NCREditLogEntry {
+  timestamp: string;
+  editedBy?: string;
+  summary?: string;
+  previousStatus?: string;
+  newStatus?: string;
+}
+
 export interface NCRRecord {
   id: string;
   ncrNumber: string;
@@ -60,6 +68,17 @@ export interface NCRRecord {
   status: NCRStatus;
   nextAction: string;
   owner: string;
+
+  // Edit Date & Time Auditing
+  createdAt?: string;
+  lastEditedAt?: string;
+  lastEditedBy?: string;
+  editHistory?: NCREditLogEntry[];
+
+  // Detailed Root Cause & Corrective Action
+  rootCauseAnalysis?: string;
+  correctiveActionPlan?: string;
+  savedPdfPath?: string;
 }
 
 export interface ComplianceAudit {
@@ -71,6 +90,12 @@ export interface ComplianceAudit {
   nextDueDate: string;
   status: 'Compliant' | 'Due Soon' | 'Action Required';
   leadAuditor: string;
+  scope?: string;
+  findings?: string;
+  correctiveActions?: string;
+  notes?: string;
+  savedPdfPath?: string;
+  lastSavedAt?: string;
 }
 
 // Module 2: Workforce Competency & Training Matrix
@@ -85,7 +110,6 @@ export interface TrainingRecord {
   issueDate: string;
   expirationDate: string;
   status: CertStatus;
-  badgeNumber: string;
   contactEmail: string;
   notes?: string;
 }

@@ -11,28 +11,41 @@ import {
   ChevronDown,
   Calendar,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  FileEdit,
+  FolderTree,
+  FileText
 } from 'lucide-react';
 import { ComplianceAudit, NCRRecord, SeverityLevel, NCRStatus } from '../../types';
+import { EditAuditModal } from '../modals/EditAuditModal';
+import { EditNcrModal } from '../modals/EditNcrModal';
 
 interface ComplianceTrackerProps {
   ncrs: NCRRecord[];
   audits: ComplianceAudit[];
   onAddNcr: (ncr: NCRRecord) => void;
+  onUpdateNcr?: (updatedNcr: NCRRecord) => void;
   onUpdateNcrStatus: (id: string, newStatus: NCRStatus) => void;
+  onUpdateAudit?: (updatedAudit: ComplianceAudit) => void;
+  onAddAudit?: (newAudit: ComplianceAudit) => void;
 }
 
 export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
   ncrs,
   audits,
   onAddNcr,
+  onUpdateNcr,
   onUpdateNcrStatus,
+  onUpdateAudit,
+  onAddAudit,
 }) => {
   const [activeTab, setActiveTab] = useState<'ncrs' | 'audits'>('ncrs');
   const [searchTerm, setSearchTerm] = useState('');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedAuditForEdit, setSelectedAuditForEdit] = useState<ComplianceAudit | null>(null);
+  const [selectedNcrForEdit, setSelectedNcrForEdit] = useState<NCRRecord | null>(null);
 
   // Form state for new NCR
   const [newNcr, setNewNcr] = useState<{
@@ -80,6 +93,11 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
     e.preventDefault();
     if (!newNcr.defectDescription.trim()) return;
 
+    const now = new Date();
+    const pad = (n: number) => (n < 10 ? '0' + n : n);
+    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
     const record: NCRRecord = {
       id: `ncr-${Date.now()}`,
       ncrNumber: newNcr.ncrNumber,
@@ -89,11 +107,22 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
       defectDescription: newNcr.defectDescription,
       standardClause: newNcr.standardClause,
       severity: newNcr.severity,
-      containmentDate: new Date().toISOString().split('T')[0],
+      containmentDate: todayStr,
       rootCauseMethod: newNcr.rootCauseMethod,
       status: 'Open',
       nextAction: newNcr.nextAction || 'Initiate quarantine & 5-Why root cause determination.',
       owner: newNcr.owner,
+      createdAt: timeStr,
+      lastEditedAt: timeStr,
+      lastEditedBy: newNcr.owner || 'Quality Assurance',
+      editHistory: [
+        {
+          timestamp: timeStr,
+          editedBy: newNcr.owner || 'Quality Assurance',
+          summary: 'Initial Non-Conformance Report logged and containment baseline established.',
+          newStatus: 'Open',
+        },
+      ],
     };
 
     onAddNcr(record);
@@ -402,7 +431,8 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                     <th className="py-3 px-3.5">Standard & Severity</th>
                     <th className="py-3 px-3.5">Analysis & Owner</th>
                     <th className="py-3 px-3.5">Status</th>
-                    <th className="py-3 px-3.5">Next Action</th>
+                    <th className="py-3 px-3.5">Next Action & Timestamps</th>
+                    <th className="py-3 px-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -448,13 +478,32 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                       </td>
                       <td className="py-3.5 px-3.5 align-top max-w-sm">
                         <p className="text-slate-600 text-[11px] leading-snug">{ncr.nextAction}</p>
-                        <p className="text-[10px] text-slate-400 mt-1">Containment: {ncr.containmentDate}</p>
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 mt-1.5 pt-1 border-t border-slate-100">
+                          <span className="text-[10px] text-slate-400">Containment: <strong className="font-mono text-slate-600 font-semibold">{ncr.containmentDate}</strong></span>
+                          {ncr.lastEditedAt && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-indigo-700 bg-indigo-50/70 px-1.5 py-0.5 rounded border border-indigo-100 font-mono">
+                              <Clock className="w-2.5 h-2.5 text-indigo-500 shrink-0" />
+                              <span>Edited: {ncr.lastEditedAt}</span>
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-3.5 align-top text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedNcrForEdit(ncr)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-sky-700 hover:text-sky-900 bg-sky-50 hover:bg-sky-100 border border-sky-200 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                          title="Edit Non-Conformance Report & CAPA"
+                        >
+                          <FileEdit className="w-3.5 h-3.5 text-sky-600" />
+                          <span>Edit NCR</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
                   {filteredNcrs.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                      <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
                         No non-conformance records match your filter criteria.
                       </td>
                     </tr>
@@ -466,8 +515,17 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
         ) : (
           /* Audits View */
           <div className="p-4 sm:p-5 space-y-4">
-            <div className="border border-slate-200 rounded-lg overflow-hidden">
-              <table className="w-full text-left text-xs text-slate-700">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-slate-900">AS9100D & ISO 9001 Audits & Management Reviews</h3>
+                <p className="text-xs text-slate-500">
+                  Track surveillance cycles, governing standard clauses, last completed dates, and generate archived PDF reports.
+                </p>
+              </div>
+            </div>
+
+            <div className="border border-slate-200 rounded-lg overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-700 min-w-[760px]">
                 <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   <tr>
                     <th className="py-3 px-3.5">Audit / Review Event</th>
@@ -477,12 +535,21 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                     <th className="py-3 px-3.5">Next Due Date</th>
                     <th className="py-3 px-3.5">Lead / Auditor</th>
                     <th className="py-3 px-3.5">Status</th>
+                    <th className="py-3 px-3.5 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {audits.map((aud) => (
-                    <tr key={aud.id} className="hover:bg-slate-50/80">
-                      <td className="py-3.5 px-3.5 font-medium text-slate-900">{aud.title}</td>
+                    <tr key={aud.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3.5 px-3.5 font-medium text-slate-900">
+                        <div className="font-semibold text-slate-900">{aud.title}</div>
+                        {aud.savedPdfPath && (
+                          <div className="flex items-center gap-1 text-[10px] text-sky-700 font-mono mt-0.5 truncate max-w-xs" title={aud.savedPdfPath}>
+                            <FolderTree className="w-3 h-3 text-sky-500 shrink-0" />
+                            <span className="truncate">{aud.savedPdfPath.split('\\').pop() || 'PDF Saved'}</span>
+                          </div>
+                        )}
+                      </td>
                       <td className="py-3.5 px-3.5 font-mono text-[11px] text-sky-700">{aud.standard}</td>
                       <td className="py-3.5 px-3.5 text-slate-600">{aud.cadence}</td>
                       <td className="py-3.5 px-3.5 font-mono text-slate-600">{aud.lastCompleted}</td>
@@ -493,11 +560,24 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
                           className={`px-2 py-0.5 text-[10px] font-semibold rounded border ${
                             aud.status === 'Compliant'
                               ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
-                              : 'bg-amber-100 text-amber-800 border-amber-200'
+                              : aud.status === 'Due Soon'
+                              ? 'bg-amber-100 text-amber-800 border-amber-200'
+                              : 'bg-rose-100 text-rose-800 border-rose-200'
                           }`}
                         >
                           {aud.status}
                         </span>
+                      </td>
+                      <td className="py-3.5 px-3.5 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAuditForEdit(aud)}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-md border border-sky-200 transition-colors cursor-pointer shadow-2xs"
+                          title="Edit Audit Event & Generate PDF"
+                        >
+                          <FileEdit className="w-3.5 h-3.5 text-sky-600" />
+                          <span>Edit</span>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -632,6 +712,30 @@ export const ComplianceTracker: React.FC<ComplianceTrackerProps> = ({
             </form>
           </div>
         </div>
+      )}
+      {/* Edit Audit / Review Event Modal */}
+      {selectedAuditForEdit && (
+        <EditAuditModal
+          isOpen={!!selectedAuditForEdit}
+          audit={selectedAuditForEdit}
+          onClose={() => setSelectedAuditForEdit(null)}
+          onSave={(updated) => {
+            onUpdateAudit?.(updated);
+            setSelectedAuditForEdit(null);
+          }}
+        />
+      )}
+      {/* Edit Non-Conformance Report (NCR) Modal */}
+      {selectedNcrForEdit && (
+        <EditNcrModal
+          isOpen={!!selectedNcrForEdit}
+          ncr={selectedNcrForEdit}
+          onClose={() => setSelectedNcrForEdit(null)}
+          onSave={(updated) => {
+            onUpdateNcr?.(updated);
+            setSelectedNcrForEdit(null);
+          }}
+        />
       )}
     </div>
   );

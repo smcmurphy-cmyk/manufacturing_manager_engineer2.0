@@ -136,10 +136,10 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
     { num: '#2', label: 'Stencil File (BOT/TOP)', status: job.checks.stencilBotTop ? 'PASSED' : 'FAILED', detail: 'Laser-Cut Step Stencil Verified' },
     { num: '#3', label: 'SPI File (BOT/TOP)', status: job.checks.spiBotTop ? 'PASSED' : 'FAILED', detail: '3D Solder Paste Thresholds' },
     { num: '#4', label: 'PNP Pick & Place File (BOT/TOP)', status: job.checks.pnpBotTop ? 'PASSED' : 'FAILED', detail: 'Feeder Mapping Synchronized' },
-    { num: '#5', label: 'AOI Inspection File (BOT/TOP)', status: job.checks.aoiBotTop ? 'PASSED' : 'FAILED', detail: 'Pre-Reflow Optical Program' },
+    { num: '#5', label: 'AOI Inspection File (BOT/TOP)', status: job.checks.aoiBotTop ? 'PASSED' : 'FAILED', detail: 'Thermal Profile Verified' },
     { num: '#6', label: 'Passed Test? (Functional / ICT)', status: job.passedTest === 'Yes' ? 'PASSED' : 'FAILED', detail: `Test Sign-Off: ${job.passedTestDate || 'Approved'}` },
     { num: '#7', label: 'Passed QA? (Quality Assurance Sign-Off)', status: job.passedQa === 'Yes' ? 'PASSED' : 'FAILED', detail: `QA Sign-Off: ${job.passedQaDate || 'Approved'}` },
-    { num: '#8', label: 'AOI Final File (BOT/TOP)', status: job.checks.aoiFinalBotTop ? 'PASSED' : 'FAILED', detail: 'Post-Reflow AOI Package Complete' },
+    { num: '#8', label: 'AOI Final File (BOT/TOP)', status: job.checks.aoiFinalBotTop ? 'PASSED' : 'FAILED', detail: 'Final AOI Package Complete' },
   ];
 
   doc.setFont('helvetica', 'normal');
