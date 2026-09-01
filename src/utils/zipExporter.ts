@@ -12,7 +12,7 @@ export async function generateQuarterlyArchiveZip({
   quarter,
   documents,
   organizationName = 'Dynamic Engineering - Embedded Systems Mfg',
-  compiledBy = 'Steven McMurphy (Mfg Manager / Senior Embedded Mfg Engineer)',
+  compiledBy = 'Shawn Murphy (Mfg Manager / Senior Embedded Mfg Engineer)',
 }: ZipExportOptions): Promise<Blob> {
   const zip = new JSZip();
 

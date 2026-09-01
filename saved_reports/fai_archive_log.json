@@ -1,0 +1,32 @@
+[
+  {
+    "id": "LOG-1788220474497",
+    "jobId": "FAI-402",
+    "assemblyName": "Industrial Microcontroller Assembly",
+    "revision": "Rev D",
+    "totalBuildTimeHours": "3.5",
+    "serverPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai",
+    "fileName": "FAI-402_Industrial_Microcontroller_Assembly_Signoff_2026-08-31.pdf",
+    "fullPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai\\FAI-402_Industrial_Microcontroller_Assembly_Signoff_2026-08-31.pdf",
+    "fileSizeBytes": 16037,
+    "fileSizeFormatted": "15.66 KB",
+    "operatorName": "Manufacturing Engineer",
+    "loggedAt": "2026-08-31T23:54:34.497Z",
+    "status": "Saved to Server"
+  },
+  {
+    "id": "LOG-1788218840059",
+    "jobId": "FAI-402",
+    "assemblyName": "Industrial Microcontroller Assembly",
+    "revision": "Rev D",
+    "totalBuildTimeHours": "3.5",
+    "serverPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai",
+    "fileName": "FAI-402_test_2026-08-31.pdf",
+    "fullPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai\\FAI-402_test_2026-08-31.pdf",
+    "fileSizeBytes": 20,
+    "fileSizeFormatted": "20 Bytes",
+    "operatorName": "spm",
+    "loggedAt": "2026-08-31T23:27:20.059Z",
+    "status": "Saved to Server"
+  }
+]

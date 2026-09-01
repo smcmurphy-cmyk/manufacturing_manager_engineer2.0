@@ -268,7 +268,7 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
   doc.setFont('helvetica', 'bold');
   doc.text('STATUS: DISPATCH TO LINE APPROVED', margin + 3, y + 20);
 
-  // Sign Box 2: Quality Assurance Inspector
+  // Sign Box 2: Quality Assurance Technician
   doc.setDrawColor(203, 213, 225);
   doc.rect(margin + signBoxWidth + 6, y, signBoxWidth, 24);
   doc.setFont('helvetica', 'bold');
