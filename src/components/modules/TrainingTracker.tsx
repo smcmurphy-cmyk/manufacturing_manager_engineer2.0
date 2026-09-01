@@ -15,6 +15,8 @@ import {
   RotateCcw,
   BookOpen,
   Calendar,
+  Pencil,
+  Save,
   X
 } from 'lucide-react';
 import { TrainingRecord, CertStatus } from '../../types';
@@ -26,7 +28,7 @@ interface TrainingTrackerProps {
   onUpdateRecord?: (record: TrainingRecord) => void;
 }
 
-type ActiveModalType = 'new-cert' | 'competency-audit' | 'renewal-notice' | 'retest-action' | null;
+type ActiveModalType = 'new-cert' | 'edit-record' | 'renewal-notice' | 'retest-action' | null;
 
 export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
   records,
@@ -69,7 +71,6 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
     const status = getCalculatedStatus(r.expirationDate);
     const matchesSearch =
       r.operatorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.badgeNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.certificationTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
       r.role.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStandard = standardFilter === 'ALL' || r.standardLevel.includes(standardFilter);
@@ -89,7 +90,6 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
     certificationTitle: 'Certified IPC Specialist (CIS)',
     standardLevel: 'IPC-A-610 Class 3',
     issueDate: todayStr,
-    badgeNumber: `OP-${Math.floor(1000 + Math.random() * 9000)}`,
     contactEmail: 'Smcmurphy@gmail.com',
     notes: '',
   });
@@ -113,52 +113,56 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
       issueDate: newRec.issueDate,
       expirationDate: expirationDate,
       status: getCalculatedStatus(expirationDate),
-      badgeNumber: newRec.badgeNumber,
       contactEmail: newRec.contactEmail,
       notes: newRec.notes,
     };
 
     onAddRecord(record);
     setActiveModal(null);
-    showToast(`Recorded certification for ${newRec.operatorName} (${newRec.badgeNumber})`);
+    showToast(`Recorded certification for ${newRec.operatorName}`);
     setNewRec({
       operatorName: '',
       role: 'SMT Assembly Technician',
       certificationTitle: 'Certified IPC Specialist (CIS)',
       standardLevel: 'IPC-A-610 Class 3',
       issueDate: todayStr,
-      badgeNumber: `OP-${Math.floor(1000 + Math.random() * 9000)}`,
       contactEmail: 'Smcmurphy@gmail.com',
       notes: '',
     });
   };
 
-  // --- Form 2: Competency Verification & Line Audit State ---
-  const [auditForm, setAuditForm] = useState({
-    operatorId: records[0]?.id || '',
-    auditType: 'IPC-A-610 Class 3 Visual Workmanship Audit',
-    leadAuditor: 'Lead Quality Inspector (CIT)',
-    auditDate: todayStr,
-    result: 'Meets Class 3 Aerospace Standard',
-    auditNotes: 'Conducted 20-point solder joint microscope audit on high-reliability flight assemblies. Zero defects observed.',
+  // --- Form 2: Edit Record & Competency State ---
+  const [editForm, setEditForm] = useState<TrainingRecord>({
+    id: records[0]?.id || '',
+    operatorName: records[0]?.operatorName || '',
+    role: records[0]?.role || '',
+    certificationTitle: records[0]?.certificationTitle || 'IPC-A-610 Specialist (CIS)',
+    standardLevel: records[0]?.standardLevel || 'IPC-A-610 Class 3',
+    issueDate: records[0]?.issueDate || todayStr,
+    expirationDate: records[0]?.expirationDate || todayStr,
+    status: records[0]?.status || 'Valid',
+    supervisor: records[0]?.supervisor || 'Quality Manager',
+    contactEmail: records[0]?.contactEmail || 'Smcmurphy@gmail.com',
+    notes: records[0]?.notes || '',
   });
 
-  const handleSaveCompetencyAudit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const target = records.find((r) => r.id === auditForm.operatorId);
-    if (!target) return;
+  const openEditModal = (rec?: TrainingRecord) => {
+    const target = rec || records[0];
+    if (target) {
+      setEditForm({ ...target });
+      setActiveModal('edit-record');
+    }
+  };
 
-    const auditStamp = `[Audit ${auditForm.auditDate} by ${auditForm.leadAuditor}: ${auditForm.result} - ${auditForm.auditNotes}]`;
-    const updatedRecord: TrainingRecord = {
-      ...target,
-      notes: target.notes ? `${target.notes} | ${auditStamp}` : auditStamp,
-    };
+  const handleSaveEditRecord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editForm.id) return;
 
     if (onUpdateRecord) {
-      onUpdateRecord(updatedRecord);
+      onUpdateRecord(editForm);
     }
     setActiveModal(null);
-    showToast(`Competency audit logged for ${target.operatorName}`);
+    showToast(`Updated record for ${editForm.operatorName}`);
   };
 
   // --- Form 3: Renewal & Expiration Dispatch Form State ---
@@ -251,7 +255,7 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
         </div>
       )}
 
-      {/* Metrics Row (Interactive Filter & Form Trigger Cards) */}
+      {/* Metrics Row (Interactive Filter Cards) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Certified Workforce */}
         <button
@@ -261,12 +265,11 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
             setStatusFilter('ALL');
             setStandardFilter('ALL');
             setSearchTerm('');
-            setActiveModal('new-cert');
           }}
-          className={`p-4 rounded-xl border text-left transition-all cursor-pointer group ${
-            activeModal === 'new-cert' || (statusFilter === 'ALL' && standardFilter === 'ALL' && !searchTerm)
-              ? 'bg-sky-50/60 border-sky-400 ring-2 ring-sky-600 shadow-xs'
-              : 'bg-white border-slate-200 shadow-2xs hover:border-sky-300 hover:shadow-xs'
+          className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
+            statusFilter === 'ALL' && standardFilter === 'ALL' && !searchTerm
+              ? 'bg-slate-50 border-slate-400 ring-2 ring-slate-800 shadow-xs'
+              : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300 hover:shadow-xs'
           }`}
         >
           <div className="flex items-center justify-between">
@@ -276,8 +279,8 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
           <p className="mt-2 text-2xl font-bold text-slate-900">{records.length}</p>
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xs text-slate-500">IPC Technicians & Engineers</p>
-            <span className="text-[10px] text-sky-700 font-medium group-hover:underline">
-              Click to record new cert
+            <span className="text-[10px] text-sky-700 font-medium">
+              {statusFilter === 'ALL' && standardFilter === 'ALL' && !searchTerm ? 'Showing all' : 'Click to view all'}
             </span>
           </div>
         </button>
@@ -287,15 +290,11 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
           id="card-trigger-valid-current"
           type="button"
           onClick={() => {
-            setStatusFilter('Valid');
-            if (validRecords.length > 0) {
-              setAuditForm((prev) => ({ ...prev, operatorId: validRecords[0].id }));
-            }
-            setActiveModal('competency-audit');
+            setStatusFilter((prev) => (prev === 'Valid' ? 'ALL' : 'Valid'));
           }}
-          className={`p-4 rounded-xl border text-left transition-all cursor-pointer group ${
+          className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
             statusFilter === 'Valid'
-              ? 'bg-emerald-50/60 border-emerald-400 ring-2 ring-emerald-600 shadow-xs'
+              ? 'bg-emerald-50/50 border-emerald-400 ring-2 ring-emerald-600 shadow-xs'
               : 'bg-white border-slate-200 shadow-2xs hover:border-emerald-300 hover:shadow-xs'
           }`}
         >
@@ -308,8 +307,8 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
           </p>
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xs text-emerald-600 font-medium">Class 3 Qualified</p>
-            <span className="text-[10px] text-emerald-700 font-medium group-hover:underline">
-              Click for line audit form
+            <span className="text-[10px] text-emerald-700 font-medium">
+              {statusFilter === 'Valid' ? 'Filtered active' : 'Click to filter'}
             </span>
           </div>
         </button>
@@ -319,15 +318,11 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
           id="card-trigger-expiring-soon"
           type="button"
           onClick={() => {
-            setStatusFilter('Expiring Soon');
-            if (expiringRecords.length > 0) {
-              setRenewalForm((prev) => ({ ...prev, operatorId: expiringRecords[0].id }));
-            }
-            setActiveModal('renewal-notice');
+            setStatusFilter((prev) => (prev === 'Expiring Soon' ? 'ALL' : 'Expiring Soon'));
           }}
-          className={`p-4 rounded-xl border text-left transition-all cursor-pointer group ${
+          className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
             statusFilter === 'Expiring Soon'
-              ? 'bg-amber-50/60 border-amber-400 ring-2 ring-amber-500 shadow-xs'
+              ? 'bg-amber-50/50 border-amber-400 ring-2 ring-amber-500 shadow-xs'
               : 'bg-white border-slate-200 shadow-2xs hover:border-amber-300 hover:shadow-xs'
           }`}
         >
@@ -340,8 +335,8 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
           </p>
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xs text-amber-600 font-medium">Outlook alerts queued</p>
-            <span className="text-[10px] text-amber-700 font-medium group-hover:underline">
-              Click for renewal form
+            <span className="text-[10px] text-amber-700 font-medium">
+              {statusFilter === 'Expiring Soon' ? 'Filtered active' : 'Click to filter'}
             </span>
           </div>
         </button>
@@ -351,15 +346,11 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
           id="card-trigger-expired-hold"
           type="button"
           onClick={() => {
-            setStatusFilter('Expired');
-            if (expiredRecords.length > 0) {
-              setRetestForm((prev) => ({ ...prev, operatorId: expiredRecords[0].id }));
-            }
-            setActiveModal('retest-action');
+            setStatusFilter((prev) => (prev === 'Expired' ? 'ALL' : 'Expired'));
           }}
-          className={`p-4 rounded-xl border text-left transition-all cursor-pointer group ${
+          className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${
             statusFilter === 'Expired'
-              ? 'bg-rose-50/60 border-rose-400 ring-2 ring-rose-600 shadow-xs'
+              ? 'bg-rose-50/50 border-rose-400 ring-2 ring-rose-600 shadow-xs'
               : 'bg-white border-slate-200 shadow-2xs hover:border-rose-300 hover:shadow-xs'
           }`}
         >
@@ -372,8 +363,8 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
           </p>
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xs text-rose-600 font-medium">Requires Immediate Re-test</p>
-            <span className="text-[10px] text-rose-700 font-medium group-hover:underline">
-              Click for re-test form
+            <span className="text-[10px] text-rose-700 font-medium">
+              {statusFilter === 'Expired' ? 'Filtered active' : 'Click to filter'}
             </span>
           </div>
         </button>
@@ -516,9 +507,8 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
                   return (
                     <tr key={r.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-3.5 align-top">
-                        <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                        <div className="font-bold text-slate-900">
                           {r.operatorName}
-                          <span className="text-[10px] font-mono font-normal text-slate-500">({r.badgeNumber})</span>
                         </div>
                         <p className="text-[11px] text-slate-500 mt-0.5">{r.role}</p>
                         <p className="text-[10px] text-slate-400 flex items-center gap-1 mt-1">
@@ -578,14 +568,12 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setAuditForm((prev) => ({ ...prev, operatorId: r.id }));
-                              setActiveModal('competency-audit');
-                            }}
-                            className="px-2 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded transition-colors cursor-pointer"
-                            title="Log Line Competency Audit"
+                            onClick={() => openEditModal(r)}
+                            className="px-2 py-1 text-[11px] font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded transition-colors cursor-pointer flex items-center gap-1"
+                            title="Edit Workforce Competency Record"
                           >
-                            Audit
+                            <Pencil className="w-3 h-3 text-slate-500" />
+                            Edit
                           </button>
                         </div>
                       </td>
@@ -629,28 +617,16 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
             </div>
 
             <form onSubmit={handleCreateNewCert} className="p-4 sm:p-5 space-y-3.5 text-xs">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Operator Full Name</label>
-                  <input
-                    type="text"
-                    value={newRec.operatorName}
-                    onChange={(e) => setNewRec({ ...newRec, operatorName: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500"
-                    placeholder="e.g. Alex Morgan"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Badge ID</label>
-                  <input
-                    type="text"
-                    value={newRec.badgeNumber}
-                    onChange={(e) => setNewRec({ ...newRec, badgeNumber: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded font-mono focus:bg-white focus:ring-2 focus:ring-sky-500"
-                    required
-                  />
-                </div>
+              <div>
+                <label className="block font-medium text-slate-700 mb-1">Operator Full Name</label>
+                <input
+                  type="text"
+                  value={newRec.operatorName}
+                  onChange={(e) => setNewRec({ ...newRec, operatorName: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500"
+                  placeholder="e.g. Alex Morgan"
+                  required
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -753,68 +729,60 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 2: Workforce Competency Verification & Line Audit Form              */}
+      {/* MODAL 2: Edit Workforce Competency Record Form                            */}
       {/* ========================================================================= */}
-      {activeModal === 'competency-audit' && (
+      {activeModal === 'edit-record' && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
           <div className="w-full max-w-lg bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden animate-fade-in">
-            <div className="p-4 sm:p-5 bg-emerald-900 text-white flex items-center justify-between">
+            <div className="p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-2">
-                  <FileCheck className="w-4 h-4 text-emerald-300" />
-                  <h3 className="text-sm font-semibold">Workforce Competency Verification & Line Audit</h3>
+                  <Pencil className="w-4 h-4 text-sky-400" />
+                  <h3 className="text-sm font-semibold">Edit Workforce Competency Record</h3>
                 </div>
-                <p className="text-xs text-emerald-200 mt-0.5">
-                  IPC Class 3 Workmanship & ESD Protection Compliance Verification
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Update operator certification, role details, and competency status
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setActiveModal(null)}
-                className="text-emerald-200 hover:text-white cursor-pointer"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCompetencyAudit} className="p-4 sm:p-5 space-y-3.5 text-xs">
+            <form onSubmit={handleSaveEditRecord} className="p-4 sm:p-5 space-y-3.5 text-xs">
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Select Certified Operator</label>
-                <select
-                  value={auditForm.operatorId}
-                  onChange={(e) => setAuditForm({ ...auditForm, operatorId: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                <label className="block font-medium text-slate-700 mb-1">Operator Full Name</label>
+                <input
+                  type="text"
+                  value={editForm.operatorName}
+                  onChange={(e) => setEditForm({ ...editForm, operatorName: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500"
                   required
-                >
-                  {records.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.operatorName} ({r.badgeNumber}) — {r.standardLevel} [Exp: {r.expirationDate}]
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Verification Scope</label>
-                  <select
-                    value={auditForm.auditType}
-                    onChange={(e) => setAuditForm({ ...auditForm, auditType: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                  >
-                    <option value="IPC-A-610 Class 3 Visual Workmanship Audit">IPC-A-610 Class 3 Visual Audit</option>
-                    <option value="J-STD-001 Solder Joint Quality Verification">J-STD-001 Solder Quality Audit</option>
-                    <option value="IPC-7711/7721 SMT Rework & Pad Repair Audit">IPC-7711/7721 Rework Audit</option>
-                    <option value="ANSI/ESD S20.20 Daily Workstation ESD Audit">ANSI/ESD S20.20 ESD Audit</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">Auditor / CIT Lead</label>
+                  <label className="block font-medium text-slate-700 mb-1">Role / Workstation</label>
                   <input
                     type="text"
-                    value={auditForm.leadAuditor}
-                    onChange={(e) => setAuditForm({ ...auditForm, leadAuditor: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                    value={editForm.role}
+                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Contact Email</label>
+                  <input
+                    type="email"
+                    value={editForm.contactEmail}
+                    onChange={(e) => setEditForm({ ...editForm, contactEmail: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500"
                     required
                   />
                 </div>
@@ -822,37 +790,70 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Verification Date</label>
+                  <label className="block font-medium text-slate-700 mb-1">Governing Standard</label>
+                  <select
+                    value={editForm.standardLevel}
+                    onChange={(e) => {
+                      const std = e.target.value;
+                      let title = editForm.certificationTitle;
+                      if (std.includes('IPC-A-610')) title = 'IPC-A-610 Specialist (CIS)';
+                      else if (std.includes('J-STD-001')) title = 'J-STD-001 Specialist (CIS)';
+                      else if (std.includes('IPC-7711')) title = 'IPC-7711/7721 Rework Specialist';
+                      else if (std.includes('ESD')) title = 'ESD Program Coordinator';
+                      setEditForm({ ...editForm, standardLevel: std, certificationTitle: title });
+                    }}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500 cursor-pointer"
+                  >
+                    <option value="IPC-A-610 Class 3">IPC-A-610 Class 3 (Aerospace & Military)</option>
+                    <option value="IPC-A-610 Class 2">IPC-A-610 Class 2 (Dedicated Service)</option>
+                    <option value="J-STD-001 Class 3">J-STD-001 Class 3 (Space & Flight Addendum)</option>
+                    <option value="IPC-7711/7721 Class 3">IPC-7711/7721 Class 3 Rework & Repair</option>
+                    <option value="ANSI/ESD S20.20">ANSI/ESD S20.20 Plant Compliance</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Supervisor / Proctor</label>
+                  <input
+                    type="text"
+                    value={editForm.supervisor}
+                    onChange={(e) => setEditForm({ ...editForm, supervisor: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Issue Date</label>
                   <input
                     type="date"
-                    value={auditForm.auditDate}
-                    onChange={(e) => setAuditForm({ ...auditForm, auditDate: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded font-mono focus:bg-white focus:ring-2 focus:ring-emerald-500"
+                    value={editForm.issueDate}
+                    onChange={(e) => setEditForm({ ...editForm, issueDate: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded font-mono focus:bg-white focus:ring-2 focus:ring-sky-500"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block font-medium text-slate-700 mb-1">Competency Evaluation</label>
-                  <select
-                    value={auditForm.result}
-                    onChange={(e) => setAuditForm({ ...auditForm, result: e.target.value })}
-                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-emerald-500 cursor-pointer font-medium"
-                  >
-                    <option value="Meets Class 3 Aerospace Standard">Meets Class 3 Aerospace Standard</option>
-                    <option value="Exceeds Standard - Candidate for CIT">Exceeds Standard (Trainer Candidate)</option>
-                    <option value="Conditional - Refresher Recommended">Conditional (Refresher Recommended)</option>
-                  </select>
+                  <label className="block font-medium text-slate-700 mb-1">Expiration Date</label>
+                  <input
+                    type="date"
+                    value={editForm.expirationDate}
+                    onChange={(e) => setEditForm({ ...editForm, expirationDate: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded font-mono focus:bg-white focus:ring-2 focus:ring-sky-500"
+                    required
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 mb-1">Audit Findings & Workmanship Observations</label>
+                <label className="block font-medium text-slate-700 mb-1">Competency Notes & Workmanship Details</label>
                 <textarea
                   rows={3}
-                  value={auditForm.auditNotes}
-                  onChange={(e) => setAuditForm({ ...auditForm, auditNotes: e.target.value })}
-                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-emerald-500"
-                  placeholder="Record specific microscope observation, fillet wetting verification, or ESD mat resistance checks..."
+                  value={editForm.notes}
+                  onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500"
+                  placeholder="Module qualifications, certified soldering scopes, microscope audit notes, etc."
                 />
               </div>
 
@@ -866,10 +867,10 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded shadow-xs cursor-pointer flex items-center gap-1.5"
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded shadow-xs cursor-pointer flex items-center gap-1.5"
                 >
-                  <CheckCircle2 className="w-4 h-4" />
-                  Log Competency Verification
+                  <Save className="w-4 h-4" />
+                  Save Changes
                 </button>
               </div>
             </form>
@@ -916,7 +917,7 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
                     const daysLeft = getDaysRemaining(r.expirationDate);
                     return (
                       <option key={r.id} value={r.id}>
-                        {r.operatorName} ({r.badgeNumber}) — {r.standardLevel} [{status}: {daysLeft}d left, Exp: {r.expirationDate}]
+                        {r.operatorName} — {r.standardLevel} [{status}: {daysLeft}d left, Exp: {r.expirationDate}]
                       </option>
                     );
                   })}
@@ -1046,7 +1047,7 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
                     const status = getCalculatedStatus(r.expirationDate);
                     return (
                       <option key={r.id} value={r.id}>
-                        {r.operatorName} ({r.badgeNumber}) — {r.standardLevel} [{status}: Exp {r.expirationDate}]
+                        {r.operatorName} — {r.standardLevel} [{status}: Exp {r.expirationDate}]
                       </option>
                     );
                   })}

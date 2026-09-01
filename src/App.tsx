@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ActiveModule, AssetRecord, EngineeringJob, NCRRecord, NCRStatus, TrainingRecord } from './types';
+import { ActiveModule, AssetRecord, ComplianceAudit, EngineeringJob, NCRRecord, NCRStatus, TrainingRecord } from './types';
 import {
   INITIAL_ASSETS,
   INITIAL_AUDITS,
@@ -36,8 +36,38 @@ export default function App() {
     setNcrs([newNcr, ...ncrs]);
   };
 
+  const handleUpdateNcr = (updatedNcr: NCRRecord) => {
+    setNcrs(ncrs.map((n) => (n.id === updatedNcr.id ? updatedNcr : n)));
+  };
+
   const handleUpdateNcrStatus = (id: string, newStatus: NCRStatus) => {
-    setNcrs(ncrs.map((n) => (n.id === id ? { ...n, status: newStatus } : n)));
+    const now = new Date();
+    const pad = (n: number) => (n < 10 ? '0' + n : n);
+    const timeStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+    setNcrs(
+      ncrs.map((n) => {
+        if (n.id !== id) return n;
+        const entry = {
+          timestamp: timeStr,
+          editedBy: 'Quality Assurance',
+          summary: `Status transitioned from '${n.status}' to '${newStatus}'`,
+          previousStatus: n.status,
+          newStatus,
+        };
+        return {
+          ...n,
+          status: newStatus,
+          lastEditedAt: timeStr,
+          lastEditedBy: 'Quality Assurance',
+          editHistory: [entry, ...(n.editHistory || [])],
+        };
+      })
+    );
+  };
+
+  const handleUpdateAudit = (updatedAudit: ComplianceAudit) => {
+    setAudits(audits.map((a) => (a.id === updatedAudit.id ? updatedAudit : a)));
   };
 
   // Handlers for Module 2: Training
@@ -226,7 +256,9 @@ export default function App() {
               ncrs={ncrs}
               audits={audits}
               onAddNcr={handleAddNcr}
+              onUpdateNcr={handleUpdateNcr}
               onUpdateNcrStatus={handleUpdateNcrStatus}
+              onUpdateAudit={handleUpdateAudit}
             />
           )}
 

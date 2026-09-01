@@ -96,8 +96,8 @@ export function buildLiveQ3QuarterlyDocuments(
 
     items.push({
       id: `live-${tr.id}`,
-      documentNumber: `CERT-${tr.badgeNumber}-${tr.id.toUpperCase()}`,
-      title: `${tr.operatorName} (${tr.badgeNumber}) — ${tr.certificationTitle}`,
+      documentNumber: `CERT-${tr.id.toUpperCase()}`,
+      title: `${tr.operatorName} — ${tr.certificationTitle}`,
       moduleSource: 'Module 2: Training',
       moduleKey: 'training',
       standardClause: tr.standardLevel,
@@ -108,7 +108,7 @@ export function buildLiveQ3QuarterlyDocuments(
       ownerOrLead: `${tr.operatorName} (${tr.role})`,
       criticality: tr.status === 'Expired' ? 'High' : tr.status === 'Expiring Soon' ? 'Medium' : 'Low',
       details: `Standard Level: ${tr.standardLevel} | Expires: ${tr.expirationDate}. Notes: ${tr.notes || 'In Good Standing'}`,
-      departmentOrLocation: `Badge: ${tr.badgeNumber} / Contact: ${tr.contactEmail}`,
+      departmentOrLocation: `Contact: ${tr.contactEmail}`,
       rawData: tr,
     });
   });

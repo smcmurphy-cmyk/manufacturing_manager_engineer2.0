@@ -15,6 +15,9 @@ export const APP_PATHS = {
 
   // Module-Specific Storage Destinations
   FAI_REPORTS: `${BASE_REPORTS_DIR}\\FAI`,
+  AUDIT_REPORTS: `${BASE_REPORTS_DIR}\\Audits`,
+  NCR_REPORTS: `${BASE_REPORTS_DIR}\\NCRs`,
+  COMPLIANCE_REPORTS: `${BASE_REPORTS_DIR}\\Compliance`,
   QA_REPORTS: `${BASE_REPORTS_DIR}\\QA`,
   DISPATCH_REPORTS: `${BASE_REPORTS_DIR}\\Dispatch`,
   MAINTENANCE_REPORTS: `${BASE_REPORTS_DIR}\\Maintenance`,

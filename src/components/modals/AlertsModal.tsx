@@ -74,7 +74,7 @@ export const AlertsModal: React.FC<AlertsModalProps> = ({
         daysRemaining: diff,
         severity: diff < 0 ? 'critical' : diff <= 14 ? 'critical' : diff <= 30 ? 'warning' : 'notice',
         recipient: t.contactEmail,
-        details: `Operator: ${t.operatorName} (${t.badgeNumber})\nRole: ${t.role}\nCertification: ${t.certificationTitle} (${t.standardLevel})`,
+        details: `Operator: ${t.operatorName}\nRole: ${t.role}\nCertification: ${t.certificationTitle} (${t.standardLevel})`,
       });
     }
   });
