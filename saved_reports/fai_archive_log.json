@@ -1,5 +1,20 @@
 [
   {
+    "id": "LOG-1788221502211",
+    "jobId": "FAI-402",
+    "assemblyName": "Industrial Microcontroller Assembly",
+    "revision": "Rev D",
+    "totalBuildTimeHours": "3.5",
+    "serverPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai",
+    "fileName": "FAI-402_Industrial_Microcontroller_Assembly_Signoff_2026-09-01.pdf",
+    "fullPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai\\FAI-402_Industrial_Microcontroller_Assembly_Signoff_2026-09-01.pdf",
+    "fileSizeBytes": 14904,
+    "fileSizeFormatted": "14.55 KB",
+    "operatorName": "Shawn Murphy",
+    "loggedAt": "2026-09-01T00:11:42.211Z",
+    "status": "Saved to Server"
+  },
+  {
     "id": "LOG-1788220474497",
     "jobId": "FAI-402",
     "assemblyName": "Industrial Microcontroller Assembly",
