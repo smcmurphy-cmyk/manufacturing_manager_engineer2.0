@@ -1,5 +1,35 @@
 [
   {
+    "id": "LOG-1788228224892",
+    "jobId": "FAI-398",
+    "assemblyName": "S-Band Telemetry RF Transceiver",
+    "revision": "Rev A.2",
+    "totalBuildTimeHours": "2.5",
+    "serverPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai",
+    "fileName": "FAI-398_S-Band_Telemetry_RF_Transceiver_Signoff_2026-09-01.pdf",
+    "fullPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai\\FAI-398_S-Band_Telemetry_RF_Transceiver_Signoff_2026-09-01.pdf",
+    "fileSizeBytes": 14768,
+    "fileSizeFormatted": "14.42 KB",
+    "operatorName": "Manufacturing Engineer",
+    "loggedAt": "2026-09-01T02:03:44.892Z",
+    "status": "Saved to Server"
+  },
+  {
+    "id": "LOG-1788228050298",
+    "jobId": "FAI-402",
+    "assemblyName": "Industrial Microcontroller Assembly",
+    "revision": "Rev D",
+    "totalBuildTimeHours": "3.5",
+    "serverPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai",
+    "fileName": "FAI-402_Industrial_Microcontroller_Assembly_Signoff_2026-09-01.pdf",
+    "fullPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\saved_reports\\fai\\FAI-402_Industrial_Microcontroller_Assembly_Signoff_2026-09-01.pdf",
+    "fileSizeBytes": 14759,
+    "fileSizeFormatted": "14.41 KB",
+    "operatorName": "Manufacturing Engineer",
+    "loggedAt": "2026-09-01T02:00:50.298Z",
+    "status": "Saved to Server"
+  },
+  {
     "id": "LOG-1788221502211",
     "jobId": "FAI-402",
     "assemblyName": "Industrial Microcontroller Assembly",

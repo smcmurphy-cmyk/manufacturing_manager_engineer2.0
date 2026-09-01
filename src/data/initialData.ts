@@ -182,16 +182,7 @@ export const INITIAL_AUDITS: ComplianceAudit[] = [
     status: 'Due Soon',
     leadAuditor: 'ESD Certified Custodian',
   },
-  {
-    id: 'aud-4',
-    title: 'Solder Pot Alloy Dross & Contamination Assay',
-    standard: 'J-STD-001 §3.2.1',
-    cadence: 'Monthly (30 Days)',
-    lastCompleted: '2026-08-15',
-    nextDueDate: '2026-09-15',
-    status: 'Compliant',
-    leadAuditor: 'Materials Metrology Lab',
-  },
+  
 ];
 
 export const INITIAL_TRAINING: TrainingRecord[] = [

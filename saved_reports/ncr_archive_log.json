@@ -1,0 +1,38 @@
+[
+  {
+    "id": "NCR-LOG-1788228151017",
+    "ncrId": "ncr-1",
+    "ncrNumber": "NCR-2026-042",
+    "serialNumber": "SN-8840-0921",
+    "assemblyPartNumber": "PCA-8840-MCU",
+    "assemblyRevision": "Rev D",
+    "severity": "Critical (Class 3)",
+    "status": "In Development",
+    "serverPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\NCRs",
+    "fileName": "NCR_2026_042_PCA_8840_MCU_2026-09-01.pdf",
+    "fullPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\NCRs\\NCR_2026_042_PCA_8840_MCU_2026-09-01.pdf",
+    "fileSizeBytes": 11032,
+    "fileSizeFormatted": "10.77 KB",
+    "editor": "Lead Quality Engineer",
+    "lastEditedAt": "2026-08-31 19:02:31",
+    "loggedAt": "2026-09-01T02:02:31.017Z"
+  },
+  {
+    "id": "NCR-LOG-1788227838537",
+    "ncrId": "ncr-1788227590249",
+    "ncrNumber": "NCR-2026-047",
+    "serialNumber": "01054897",
+    "assemblyPartNumber": "PCA-8840-MCU",
+    "assemblyRevision": "Rev D",
+    "severity": "Critical (Class 3)",
+    "status": "Open",
+    "serverPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\NCRs",
+    "fileName": "NCR_2026_047_PCA_8840_MCU_2026-09-01.pdf",
+    "fullPath": "C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\NCRs\\NCR_2026_047_PCA_8840_MCU_2026-09-01.pdf",
+    "fileSizeBytes": 10378,
+    "fileSizeFormatted": "10.13 KB",
+    "editor": "Manufacturing Engineering",
+    "lastEditedAt": "2026-08-31 18:57:17",
+    "loggedAt": "2026-09-01T01:57:18.537Z"
+  }
+]
