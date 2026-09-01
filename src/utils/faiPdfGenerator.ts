@@ -43,25 +43,15 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
   doc.text('ISO 9001:2015 & AS9100D High-Reliability Manufacturing Quality System', margin, 18);
   doc.text(`Doc ID: FAI-CERT-${job.jobId}  |  Generated: ${timestamp}`, margin, 24);
 
-  // Status Stamp in Header
-  doc.setFillColor(16, 185, 129); // emerald-500
-  doc.roundedRect(pageWidth - margin - 35, 7, 35, 14, 2, 2, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.text('LOGGED & VERIFIED', pageWidth - margin - 33, 14);
-  doc.setFontSize(7);
-  doc.text('100% GATES PASSED', pageWidth - margin - 32, 18.5);
-
   let y = 38;
 
-  // Section 1: Assembly & Production Information
+  // Section 1: Manufacturing Released Data
   doc.setFillColor(241, 245, 249); // slate-100
   doc.rect(margin, y, contentWidth, 7, 'F');
   doc.setTextColor(30, 41, 59); // slate-800
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text('1. ASSEMBLY & MANUFACTURING RELEASE METADATA', margin + 3, y + 5);
+  doc.text('1. MANUFACTURING RELEASED DATA', margin + 3, y + 5);
 
   y += 10;
   doc.setFont('helvetica', 'normal');
@@ -79,9 +69,9 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
   doc.text(job.jobId, col1X + 32, y);
 
   doc.setFont('helvetica', 'bold');
-  doc.text('Customer / Account:', col2X, y);
+  doc.text('LOT #:', col2X, y);
   doc.setFont('helvetica', 'normal');
-  doc.text(job.customer || 'Internal Production', col2X + 36, y);
+  doc.text(job.customer || job.projectCode || 'Internal LOT', col2X + 36, y);
 
   y += 6;
   // Row 2
@@ -103,9 +93,11 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
   doc.text(`${job.quantity ?? 10} Units`, col1X + 32, y);
 
   doc.setFont('helvetica', 'bold');
-  doc.text('SMT Dispatch Line:', col2X, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(job.smtLine || 'SMT Line 01 (Panasonic NPM-D3)', col2X + 36, y);
+  doc.text('Total Build Time:', col2X, y);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(2, 132, 199);
+  doc.text(`${job.totalBuildTimeHours !== undefined ? job.totalBuildTimeHours : '0.0'} Hours`, col2X + 36, y);
+  doc.setTextColor(51, 65, 85);
 
   y += 6;
   // Row 4
@@ -113,13 +105,6 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
   doc.text('Target Build Date:', col1X, y);
   doc.setFont('helvetica', 'normal');
   doc.text(job.targetBuildDate ? `${job.targetBuildDate}${job.startTime ? ` @ ${job.startTime}` : ''}` : 'Scheduled on Demand', col1X + 32, y);
-
-  doc.setFont('helvetica', 'bold');
-  doc.text('Total Build Time:', col2X, y);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(2, 132, 199);
-  doc.text(`${job.totalBuildTimeHours !== undefined ? job.totalBuildTimeHours : '0.0'} Hours`, col2X + 36, y);
-  doc.setTextColor(51, 65, 85);
 
   y += 11;
 
