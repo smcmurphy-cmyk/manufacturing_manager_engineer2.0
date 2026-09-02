@@ -3,6 +3,24 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 import { createServer as createViteServer } from 'vite';
+import {
+  supabase,
+  isDatabaseConnected,
+  insertDocumentArchive,
+  getDocumentArchives,
+  getAssets,
+  saveAllAssets,
+  updateSingleAsset,
+  getNcrs,
+  saveAllNcrs,
+  updateSingleNcr,
+  getAudits,
+  saveAllAudits,
+  getTraining,
+  saveAllTraining,
+  getJobs,
+  saveAllJobs,
+} from './db';
 
 interface ArchiveLogItem {
   id: string;
@@ -21,7 +39,7 @@ interface ArchiveLogItem {
   status: string;
 }
 
-const BASE_REPORTS_DIR = process.env.REPORTS_OUTPUT_DIR || 'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports';
+const BASE_REPORTS_DIR = process.env.REPORTS_OUTPUT_DIR || 'C:\\Apps\\Reports';
 const DEFAULT_STORAGE_DIR =
   process.env.FAI_STORAGE_DIR ||
   (process.env.REPORTS_OUTPUT_DIR
@@ -240,8 +258,8 @@ async function startServer() {
     }
   });
 
-  // 4. Save PDF to Host Server Location
-  app.post('/api/fai/save-pdf', (req, res) => {
+  // 4. Save PDF to Host Server Location (Dual-Storage: Disk Binary + Postgres Archive Pointer)
+  app.post('/api/fai/save-pdf', async (req, res) => {
     try {
       const {
         serverPath,
@@ -258,14 +276,35 @@ async function startServer() {
         });
       }
 
-      // Save PDF to filesystem using shared helper
+      // 1. Save PDF binary to filesystem using shared helper
       const saved = savePdfToFileSystem(DEFAULT_STORAGE_DIR, serverPath, fileName, pdfBase64);
       const formattedSize = formatBytes(saved.size);
 
-      // Record to archive audit history log
+      // 2. Insert metadata and file pointer into PostgreSQL / Supabase
+      const archiveRecord = await insertDocumentArchive({
+        record_id: `LOG-${Date.now()}`,
+        module_type: 'FAI',
+        reference_number: jobData?.jobId || 'N/A',
+        server_path: saved.targetDir,
+        file_name: saved.safeFileName,
+        full_path: saved.finalFilePath,
+        file_size_bytes: saved.size,
+        file_size_formatted: formattedSize,
+        operator_name: operatorName,
+        metadata: {
+          jobId: jobData?.jobId || 'N/A',
+          assemblyName: jobData?.assemblyName || 'Unknown Assembly',
+          revision: jobData?.revision || 'Rev 1.0',
+          customer: jobData?.customer,
+          totalBuildTimeHours: jobData?.totalBuildTimeHours,
+        },
+        logged_at: new Date().toISOString(),
+      });
+
+      // Maintain legacy JSON archive log for backwards compatibility
       const history = loadArchiveLog();
-      const newRecord: ArchiveLogItem = {
-        id: `LOG-${Date.now()}`,
+      const legacyRecord: ArchiveLogItem = {
+        id: archiveRecord.record_id,
         jobId: jobData?.jobId || 'N/A',
         assemblyName: jobData?.assemblyName || 'Unknown Assembly',
         revision: jobData?.revision || 'Rev 1.0',
@@ -277,21 +316,22 @@ async function startServer() {
         fileSizeBytes: saved.size,
         fileSizeFormatted: formattedSize,
         operatorName,
-        loggedAt: new Date().toISOString(),
+        loggedAt: archiveRecord.logged_at || new Date().toISOString(),
         status: 'Saved to Server',
       };
 
-      history.unshift(newRecord);
+      history.unshift(legacyRecord);
       saveArchiveLog(history.slice(0, 100)); // keep last 100 records
 
       return res.json({
         success: true,
         message: 'FAI completion PDF saved successfully to host server',
-        record: newRecord,
+        record: legacyRecord,
+        archiveRecord,
         savedPath: saved.finalFilePath,
         fileName: saved.safeFileName,
         fileSize: formattedSize,
-        timestamp: newRecord.loggedAt,
+        timestamp: legacyRecord.loggedAt,
       });
     } catch (err: any) {
       console.error('Failed to save PDF on server:', err);
@@ -302,10 +342,41 @@ async function startServer() {
     }
   });
 
-  // 5. Get Saved Archives History
-  app.get('/api/fai/history', (req, res) => {
-    const history = loadArchiveLog();
-    res.json({ history });
+  // 5. Get Saved Archives History (From PostgreSQL document_archives)
+  app.get('/api/fai/history', async (req, res) => {
+    try {
+      const archives = await getDocumentArchives('FAI');
+      const history: ArchiveLogItem[] = archives.map((a) => ({
+        id: a.record_id,
+        jobId: a.reference_number || a.metadata?.jobId || 'N/A',
+        assemblyName: a.metadata?.assemblyName || 'Unknown Assembly',
+        revision: a.metadata?.revision || 'Rev 1.0',
+        customer: a.metadata?.customer,
+        totalBuildTimeHours: a.metadata?.totalBuildTimeHours,
+        serverPath: a.server_path,
+        fileName: a.file_name,
+        fullPath: a.full_path,
+        fileSizeBytes: a.file_size_bytes,
+        fileSizeFormatted: a.file_size_formatted,
+        operatorName: a.operator_name,
+        loggedAt: a.logged_at || new Date().toISOString(),
+        status: 'Saved to Server',
+      }));
+
+      // Combine with local legacy history if any
+      const legacyHistory = loadArchiveLog();
+      const seenIds = new Set(history.map((h) => h.id));
+      for (const item of legacyHistory) {
+        if (!seenIds.has(item.id)) {
+          history.push(item);
+        }
+      }
+
+      res.json({ history });
+    } catch (e: any) {
+      const history = loadArchiveLog();
+      res.json({ history });
+    }
   });
 
   // 6. Download Saved Archive directly from host
@@ -337,8 +408,8 @@ async function startServer() {
             `${BASE_REPORTS_DIR}\\Audits`,
             `${BASE_REPORTS_DIR}\\Compliance`,
             BASE_REPORTS_DIR,
+            'C:\\Apps\\Reports\\Audits',
             'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\Audits',
-            'C:\\Reports\\Audit_Records',
             '.\\saved_reports\\audits',
           ]
         : [
@@ -350,8 +421,8 @@ async function startServer() {
     });
   });
 
-  // 8. Save Audit PDF to Host Server Location
-  app.post('/api/audits/save-pdf', (req, res) => {
+  // 8. Save Audit PDF to Host Server Location (Dual-Storage)
+  app.post('/api/audits/save-pdf', async (req, res) => {
     try {
       const {
         serverPath,
@@ -372,10 +443,31 @@ async function startServer() {
       const saved = savePdfToFileSystem(DEFAULT_AUDIT_STORAGE_DIR, serverPath, fileName, pdfBase64);
       const formattedSize = formatBytes(saved.size);
 
+      // Insert into PostgreSQL document_archives
+      const archiveRecord = await insertDocumentArchive({
+        record_id: `AUD-LOG-${Date.now()}`,
+        module_type: 'Audit',
+        reference_number: auditData?.id || 'N/A',
+        server_path: saved.targetDir,
+        file_name: saved.safeFileName,
+        full_path: saved.finalFilePath,
+        file_size_bytes: saved.size,
+        file_size_formatted: formattedSize,
+        operator_name: leadAuditor,
+        metadata: {
+          auditId: auditData?.id,
+          title: auditData?.title,
+          standard: auditData?.standard,
+          cadence: auditData?.cadence,
+          status: auditData?.status,
+        },
+        logged_at: new Date().toISOString(),
+      });
+
       // Record to audit archive log
       const history = loadAuditArchiveLog();
       const newRecord = {
-        id: `AUD-LOG-${Date.now()}`,
+        id: archiveRecord.record_id,
         auditId: auditData?.id || 'N/A',
         title: auditData?.title || 'Audit Event',
         standard: auditData?.standard || 'AS9100D',
@@ -387,7 +479,7 @@ async function startServer() {
         fileSizeBytes: saved.size,
         fileSizeFormatted: formattedSize,
         leadAuditor,
-        loggedAt: new Date().toISOString(),
+        loggedAt: archiveRecord.logged_at || new Date().toISOString(),
       };
 
       history.unshift(newRecord);
@@ -397,6 +489,7 @@ async function startServer() {
         success: true,
         message: 'Audit report PDF saved successfully to host server',
         record: newRecord,
+        archiveRecord,
         savedPath: saved.finalFilePath,
         fileName: saved.safeFileName,
         fileSize: formattedSize,
@@ -411,14 +504,16 @@ async function startServer() {
     }
   });
 
-  // 9. Generic Document Save PDF
-  app.post('/api/documents/save-pdf', (req, res) => {
+  // 9. Generic Document Save PDF (Dual-Storage)
+  app.post('/api/documents/save-pdf', async (req, res) => {
     try {
       const {
         serverPath,
         fileName,
         pdfBase64,
         documentType = 'Report',
+        referenceNumber = 'DOC-REF',
+        operatorName = 'Manufacturing Engineer',
       } = req.body;
 
       if (!fileName || !pdfBase64) {
@@ -432,9 +527,25 @@ async function startServer() {
       const saved = savePdfToFileSystem(defaultDir, serverPath, fileName, pdfBase64);
       const formattedSize = formatBytes(saved.size);
 
+      // Record to PostgreSQL document_archives
+      const archiveRecord = await insertDocumentArchive({
+        record_id: `DOC-LOG-${Date.now()}`,
+        module_type: 'Report',
+        reference_number: referenceNumber,
+        server_path: saved.targetDir,
+        file_name: saved.safeFileName,
+        full_path: saved.finalFilePath,
+        file_size_bytes: saved.size,
+        file_size_formatted: formattedSize,
+        operator_name: operatorName,
+        metadata: { documentType },
+        logged_at: new Date().toISOString(),
+      });
+
       return res.json({
         success: true,
         message: 'Document PDF saved successfully to host server',
+        archiveRecord,
         savedPath: saved.finalFilePath,
         fileName: saved.safeFileName,
         fileSize: formattedSize,
@@ -466,8 +577,8 @@ async function startServer() {
             `${BASE_REPORTS_DIR}\\Compliance`,
             `${BASE_REPORTS_DIR}\\QA`,
             BASE_REPORTS_DIR,
+            'C:\\Apps\\Reports\\NCRs',
             'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\NCRs',
-            'C:\\Reports\\NCR_Records',
             '.\\saved_reports\\ncrs',
           ]
         : [
@@ -479,8 +590,8 @@ async function startServer() {
     });
   });
 
-  // 11. Save NCR PDF to Host Server Location
-  app.post('/api/ncrs/save-pdf', (req, res) => {
+  // 11. Save NCR PDF to Host Server Location (Dual-Storage)
+  app.post('/api/ncrs/save-pdf', async (req, res) => {
     try {
       const {
         serverPath,
@@ -501,10 +612,33 @@ async function startServer() {
       const saved = savePdfToFileSystem(DEFAULT_NCR_STORAGE_DIR, serverPath, fileName, pdfBase64);
       const formattedSize = formatBytes(saved.size);
 
+      // Insert into PostgreSQL document_archives
+      const archiveRecord = await insertDocumentArchive({
+        record_id: `NCR-LOG-${Date.now()}`,
+        module_type: 'NCR',
+        reference_number: ncrData?.ncrNumber || 'NCR-RECORD',
+        server_path: saved.targetDir,
+        file_name: saved.safeFileName,
+        full_path: saved.finalFilePath,
+        file_size_bytes: saved.size,
+        file_size_formatted: formattedSize,
+        operator_name: editor,
+        metadata: {
+          ncrId: ncrData?.id,
+          ncrNumber: ncrData?.ncrNumber,
+          serialNumber: ncrData?.serialNumber,
+          assemblyPartNumber: ncrData?.assemblyPartNumber,
+          assemblyRevision: ncrData?.assemblyRevision,
+          severity: ncrData?.severity,
+          status: ncrData?.status,
+        },
+        logged_at: new Date().toISOString(),
+      });
+
       // Record to NCR archive log
       const history = loadNcrArchiveLog();
       const newRecord = {
-        id: `NCR-LOG-${Date.now()}`,
+        id: archiveRecord.record_id,
         ncrId: ncrData?.id || 'N/A',
         ncrNumber: ncrData?.ncrNumber || 'NCR-RECORD',
         serialNumber: ncrData?.serialNumber || 'N/A',
@@ -519,7 +653,7 @@ async function startServer() {
         fileSizeFormatted: formattedSize,
         editor,
         lastEditedAt: ncrData?.lastEditedAt || new Date().toISOString(),
-        loggedAt: new Date().toISOString(),
+        loggedAt: archiveRecord.logged_at || new Date().toISOString(),
       };
 
       history.unshift(newRecord);
@@ -529,6 +663,7 @@ async function startServer() {
         success: true,
         message: 'NCR report PDF saved successfully to host server',
         record: newRecord,
+        archiveRecord,
         savedPath: saved.finalFilePath,
         fileName: saved.safeFileName,
         fileSize: formattedSize,
@@ -540,6 +675,211 @@ async function startServer() {
         success: false,
         message: `Failed to save NCR PDF to server: ${err.message || 'Unknown error'}`,
       });
+    }
+  });
+
+  // -------------------------------------------------------------
+  // 12. DATABASE & REGISTRY PERSISTENCE API (Phase 3 Decoupling)
+  // -------------------------------------------------------------
+
+  // Database Connection & Storage Status
+  app.get('/api/db/status', (req, res) => {
+    const connected = isDatabaseConnected();
+    res.json({
+      connected,
+      mode: connected
+        ? 'Supabase PostgreSQL'
+        : 'Local Disk Fallback (Persistent JSON in saved_reports/data/)',
+      supabaseConfigured: connected,
+      baseReportsDir: BASE_REPORTS_DIR,
+    });
+  });
+
+  // --- Asset Calibration Registry ---
+  app.get('/api/registry/assets', async (req, res) => {
+    try {
+      const assets = await getAssets();
+      res.json({ success: true, assets });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/registry/assets', async (req, res) => {
+    try {
+      const asset = req.body;
+      if (!asset || !asset.id || !asset.assetId) {
+        return res.status(400).json({ success: false, message: 'Invalid asset payload' });
+      }
+      const saved = await updateSingleAsset(asset);
+      res.json({ success: true, asset: saved });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.put('/api/registry/assets/:id', async (req, res) => {
+    try {
+      const asset = { ...req.body, id: req.params.id };
+      const saved = await updateSingleAsset(asset);
+      res.json({ success: true, asset: saved });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/registry/assets/batch', async (req, res) => {
+    try {
+      const { assets } = req.body;
+      if (!Array.isArray(assets)) {
+        return res.status(400).json({ success: false, message: 'Expected array of assets' });
+      }
+      await saveAllAssets(assets);
+      res.json({ success: true, count: assets.length });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/registry/assets/:id/calibrate', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { calibratedDate = new Date().toISOString().split('T')[0] } = req.body;
+      const currentAssets = await getAssets();
+      const asset = currentAssets.find((a) => a.id === id);
+      if (!asset) {
+        return res.status(404).json({ success: false, message: 'Asset not found' });
+      }
+      const baseDate = new Date(calibratedDate);
+      const nextDue = new Date(baseDate);
+      nextDue.setDate(nextDue.getDate() + (asset.intervalDays || 180));
+
+      const updatedAsset = {
+        ...asset,
+        lastCompleted: calibratedDate,
+        nextDueDate: nextDue.toISOString().split('T')[0],
+        status: 'Operational / Calibrated' as const,
+      };
+
+      await updateSingleAsset(updatedAsset);
+      res.json({ success: true, asset: updatedAsset });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // --- Non-Conformance Reports (NCRs) ---
+  app.get('/api/registry/ncrs', async (req, res) => {
+    try {
+      const ncrs = await getNcrs();
+      res.json({ success: true, ncrs });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/registry/ncrs', async (req, res) => {
+    try {
+      const ncr = req.body;
+      if (!ncr || !ncr.id) {
+        return res.status(400).json({ success: false, message: 'Invalid NCR payload' });
+      }
+      const saved = await updateSingleNcr(ncr);
+      res.json({ success: true, ncr: saved });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.put('/api/registry/ncrs/:id', async (req, res) => {
+    try {
+      const ncr = { ...req.body, id: req.params.id };
+      const saved = await updateSingleNcr(ncr);
+      res.json({ success: true, ncr: saved });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/registry/ncrs/batch', async (req, res) => {
+    try {
+      const { ncrs } = req.body;
+      if (!Array.isArray(ncrs)) {
+        return res.status(400).json({ success: false, message: 'Expected array of ncrs' });
+      }
+      await saveAllNcrs(ncrs);
+      res.json({ success: true, count: ncrs.length });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // --- Compliance Audits ---
+  app.get('/api/registry/audits', async (req, res) => {
+    try {
+      const audits = await getAudits();
+      res.json({ success: true, audits });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/registry/audits/batch', async (req, res) => {
+    try {
+      const { audits } = req.body;
+      if (!Array.isArray(audits)) {
+        return res.status(400).json({ success: false, message: 'Expected array of audits' });
+      }
+      await saveAllAudits(audits);
+      res.json({ success: true, count: audits.length });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // --- Operator Training ---
+  app.get('/api/registry/training', async (req, res) => {
+    try {
+      const training = await getTraining();
+      res.json({ success: true, training });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/registry/training/batch', async (req, res) => {
+    try {
+      const { training } = req.body;
+      if (!Array.isArray(training)) {
+        return res.status(400).json({ success: false, message: 'Expected array of training records' });
+      }
+      await saveAllTraining(training);
+      res.json({ success: true, count: training.length });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  // --- Engineering Jobs ---
+  app.get('/api/registry/jobs', async (req, res) => {
+    try {
+      const jobs = await getJobs();
+      res.json({ success: true, jobs });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  });
+
+  app.post('/api/registry/jobs/batch', async (req, res) => {
+    try {
+      const { jobs } = req.body;
+      if (!Array.isArray(jobs)) {
+        return res.status(400).json({ success: false, message: 'Expected array of jobs' });
+      }
+      await saveAllJobs(jobs);
+      res.json({ success: true, count: jobs.length });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
     }
   });
 

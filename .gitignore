@@ -6,3 +6,10 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local database and saved report archives
+/saved_reports/
+/data/
+*.json.bak
+archiveLog.json
+calibrationRegistry.json

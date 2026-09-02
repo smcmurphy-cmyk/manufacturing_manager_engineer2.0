@@ -8,7 +8,8 @@ import {
   Calendar,
   Layers,
   Sparkles,
-  Download
+  Download,
+  Database
 } from 'lucide-react';
 import { ActiveModule } from '../types';
 
@@ -18,6 +19,7 @@ interface HeaderProps {
   onOpenAlertModal: () => void;
   onExportMarkdown: () => void;
   totalAlertCount: number;
+  dbStatus?: { connected: boolean; mode: string };
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -26,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAlertModal,
   onExportMarkdown,
   totalAlertCount,
+  dbStatus,
 }) => {
   const getModuleDetails = () => {
     switch (activeModule) {
@@ -94,6 +97,23 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Header Actions */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {dbStatus && (
+            <div
+              id="persistence-status-indicator"
+              className={`hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md border ${
+                dbStatus.connected
+                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                  : 'bg-blue-50 text-blue-800 border-blue-200'
+              }`}
+              title={`Active Persistence: ${dbStatus.mode}`}
+            >
+              <Database className="w-3.5 h-3.5 text-current" />
+              <span className="font-semibold">
+                {dbStatus.connected ? 'Postgres (Supabase)' : 'Host Disk (JSON)'}
+              </span>
+            </div>
+          )}
+
           <button
             id="export-markdown-btn"
             onClick={onExportMarkdown}

@@ -4,10 +4,10 @@
  * (FAI Signoffs, Quality QA, Dispatch, AOI/SPI logs, Asset Maintenance, Training)
  */
 
-// Base Reports Directory from environment variable or standard default
+// Base Reports Directory from environment variable or standard default (C:\Apps\Reports)
 export const BASE_REPORTS_DIR: string =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_REPORTS_DIR) ||
-  'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports';
+  'C:\\Apps\\Reports';
 
 export const APP_PATHS = {
   // Base Root Directory
