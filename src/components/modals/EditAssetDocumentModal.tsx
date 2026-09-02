@@ -285,10 +285,12 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
                   onChange={(e) => handleIntervalChange(Number(e.target.value))}
                   className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-hidden cursor-pointer"
                 >
-                  <option value={30}>30 Days (Monthly Solder/PM)</option>
-                  <option value={90}>90 Days (Quarterly / Thermal Profiler)</option>
-                  <option value={180}>180 Days (Semi-Annual / ESD Bench)</option>
-                  <option value={365}>365 Days (Annual / Metrology Tool)</option>
+                  <option value={0}>No calibration needed</option>
+                  <option value={30}>30 Days (Monthly)</option>
+                  <option value={90}>90 Days (Quarterly)</option>
+                  <option value={180}>180 Days (Semi-Annual)</option>
+                  <option value={365}>365 Days (Annual)</option>
+                  <option value={730}>Bi-annual (Every two years)</option>
                 </select>
               </div>
 
