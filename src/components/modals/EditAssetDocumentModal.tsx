@@ -264,17 +264,24 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
                 <span>2. Metrology Calibration Cycle & Due Dates</span>
               </h4>
-              <span
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  diffDays < 0
-                    ? 'bg-rose-100 text-rose-800 border-rose-300'
-                    : diffDays <= 14
-                    ? 'bg-amber-100 text-amber-800 border-amber-300'
-                    : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                }`}
-              >
-                {diffDays < 0 ? `${Math.abs(diffDays)}d Overdue` : `${diffDays}d Remaining`}
-              </span>
+             <span
+  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+    formData.intervalDays === 0
+      ? 'bg-slate-100 text-slate-600 border-slate-300'
+      : diffDays < 0
+      ? 'bg-rose-100 text-rose-800 border-rose-300'
+      : diffDays <= 14
+      ? 'bg-amber-100 text-amber-800 border-amber-300'
+      : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+  }`}
+>
+  {formData.intervalDays === 0 
+    ? 'No calibration necessary' 
+    : diffDays < 0 
+      ? `${Math.abs(diffDays)}d Overdue` 
+      : `${diffDays}d Remaining`
+  }
+</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
