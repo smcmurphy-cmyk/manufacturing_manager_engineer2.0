@@ -207,7 +207,7 @@ export const INITIAL_TRAINING: TrainingRecord[] = [
     issueDate: '2024-10-15',
     expirationDate: '2026-10-15',
     status: 'Valid',
-    contactEmail: 'Smcmurphy@gmail.com',
+    contactEmail: 'murphy@dyneng.com',
     notes: 'Authorized to proctor internal CIS soldering certifications.',
   },
   {
@@ -340,7 +340,7 @@ export const INITIAL_ASSETS: AssetRecord[] = [
     nextDueDate: '2026-09-05',
     status: 'Calibration Due Soon',
     assignedOwner: 'Quality Metrology Lead',
-    alertEmail: 'Smcmurphy@gmail.com',
+    alertEmail: 'murphy@dyneng.com',
     serialNumber: 'MY58102941',
   },
   {
@@ -392,7 +392,7 @@ export const INITIAL_ASSETS: AssetRecord[] = [
     nextDueDate: '2026-10-01',
     status: 'Operational / Calibrated',
     assignedOwner: 'Assembly Lead',
-    alertEmail: 'Smcmurphy@gmail.com',
+    alertEmail: 'murphy@dyneng.com',
     serialNumber: 'MTZ-FG-4091',
   },
   {
@@ -405,7 +405,7 @@ export const INITIAL_ASSETS: AssetRecord[] = [
     nextDueDate: '2026-08-20',
     status: 'Cal Overdue',
     assignedOwner: 'Metrology Lab',
-    alertEmail: 'Smcmurphy@gmail.com',
+    alertEmail: 'murphy@dyneng.com',
     serialNumber: 'FLK-8846-3029',
   },
 ];

@@ -92,7 +92,7 @@ export const AlertsModal: React.FC<AlertsModalProps> = ({
         dueDate: aud.nextDueDate,
         daysRemaining: diff,
         severity: diff <= 14 ? 'warning' : 'notice',
-        recipient: 'Smcmurphy@gmail.com',
+        recipient: 'murphy@dyneng.com',
         details: `Event: ${aud.title}\nGoverning Standard: ${aud.standard}\nCadence: ${aud.cadence}\nAuditor: ${aud.leadAuditor}`,
       });
     }

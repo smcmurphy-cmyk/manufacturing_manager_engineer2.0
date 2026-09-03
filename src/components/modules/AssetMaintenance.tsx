@@ -125,7 +125,7 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
     intervalDays: 365,
     lastCompleted: todayStr,
     assignedOwner: 'Steven McMurphy (Quality Metrology Lead)',
-    alertEmail: 'Smcmurphy@gmail.com',
+    alertEmail: 'murphy@dyneng.com',
     serialNumber: `SN-${Math.floor(10000 + Math.random() * 90000)}`,
   });
 

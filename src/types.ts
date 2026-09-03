@@ -150,7 +150,7 @@ export interface EngineeringJob {
 }
 
 // Module 4: Asset PM, Calibration & ESD Alert Engine
-export type AssetStatus = 'Operational / Calibrated' | 'Calibration Due Soon' | 'Cal Overdue' | 'Out of Service';
+export type AssetStatus = 'Operational / Calibrated' | 'Calibration Due Soon' | 'Cal Overdue' | 'Out of Service' | 'No Calibration Necessary';
 
 export interface AssetRecord {
   id: string;

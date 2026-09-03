@@ -50,11 +50,14 @@ export const AssetCalibrationModal: React.FC<AssetCalibrationModalProps> = ({
   const diffDays = Math.ceil((nextDueDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
 
   let status: AssetStatus = 'Operational / Calibrated';
-  if (diffDays < 0) {
-    status = 'Cal Overdue';
-  } else if (diffDays <= 14) {
-    status = 'Calibration Due Soon';
-  }
+
+if (asset.intervalDays === 0) {
+  status = 'No Calibration Necessary';
+} else if (diffDays < 0) {
+  status = 'Cal Overdue';
+} else if (diffDays <= 14) {
+  status = 'Calibration Due Soon';
+}
 
   const certNumber = `CAL-CERT-2026-${asset.assetId.replace(/[^a-zA-Z0-9]/g, '')}`;
 

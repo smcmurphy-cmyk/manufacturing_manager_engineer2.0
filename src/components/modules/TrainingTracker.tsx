@@ -90,7 +90,7 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
     certificationTitle: 'Certified IPC Specialist (CIS)',
     standardLevel: 'IPC-A-610 Class 3',
     issueDate: todayStr,
-    contactEmail: 'Smcmurphy@gmail.com',
+    contactEmail: 'murphy@dyneng.com',
     notes: '',
   });
 
@@ -141,8 +141,8 @@ export const TrainingTracker: React.FC<TrainingTrackerProps> = ({
     issueDate: records[0]?.issueDate || todayStr,
     expirationDate: records[0]?.expirationDate || todayStr,
     status: records[0]?.status || 'Valid',
-    supervisor: records[0]?.supervisor || 'Quality Manager',
-    contactEmail: records[0]?.contactEmail || 'Smcmurphy@gmail.com',
+    supervisor: records[0]?.supervisor || 'QA Technician',
+    contactEmail: records[0]?.contactEmail || 'murphy@dyneng.com',
     notes: records[0]?.notes || '',
   });
 
