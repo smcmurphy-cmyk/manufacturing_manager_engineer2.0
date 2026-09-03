@@ -43,7 +43,12 @@ export const AlertsModal: React.FC<AlertsModalProps> = ({
 
   // 1. Assets
   assets.forEach((a) => {
+    if (Number(a.intervalDays) === 0 || a.status === 'No Calibration Necessary') {
+      return;
+    }
+    if (!a.nextDueDate || a.nextDueDate.trim() === '') return;
     const due = new Date(a.nextDueDate);
+    if (isNaN(due.getTime())) return;
     const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24));
     if (diff <= 30) {
       collectedAlerts.push({

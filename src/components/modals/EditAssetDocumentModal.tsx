@@ -46,6 +46,8 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
 
   if (!isOpen || !formData || !asset) return null;
 
+  const isNoCal = Number(formData.intervalDays) === 0 || formData.status === 'No Calibration Necessary';
+
   const calculateDueDate = (lastCompleted: string, intervalDays: number) => {
     const last = new Date(lastCompleted);
     const due = new Date(last);
@@ -54,6 +56,7 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
   };
 
   const getComputedStatus = (dueDateStr: string): AssetStatus => {
+    if (isNoCal) return 'No Calibration Necessary';
     const today = new Date(todayStr);
     const due = new Date(dueDateStr);
     const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 3600 * 24));
@@ -64,6 +67,14 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
   };
 
   const handleLastCompletedChange = (newDate: string) => {
+    if (isNoCal) {
+      setFormData({
+        ...formData,
+        lastCompleted: newDate,
+      });
+      return;
+    }
+
     if (autoCalculateDueDate) {
       const nextDue = calculateDueDate(newDate, formData.intervalDays);
       const computedStatus = getComputedStatus(nextDue);
@@ -81,20 +92,20 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
     }
   };
 
-const handleIntervalChange = (interval: number) => {
-    // Intercept the 0 interval immediately
+  const handleIntervalChange = (interval: number) => {
     if (interval === 0) {
       setFormData({
         ...formData,
         intervalDays: 0,
-        nextDueDate: '', // Wipe out the next due date
-        status: 'No Calibration Necessary', // Override status directly
+        nextDueDate: '',
+        status: 'No Calibration Necessary',
       });
-      return; 
+      return;
     }
 
+    const baseDate = formData.lastCompleted || todayStr;
     if (autoCalculateDueDate) {
-      const nextDue = calculateDueDate(formData.lastCompleted, interval);
+      const nextDue = calculateDueDate(baseDate, interval);
       const computedStatus = getComputedStatus(nextDue);
       setFormData({
         ...formData,
@@ -121,8 +132,7 @@ const handleIntervalChange = (interval: number) => {
   };
 
   const handleStampCalibratedToday = () => {
-    // If set to no calibration, just stamp the last completed date but don't set a next due date
-    if (formData.intervalDays === 0) {
+    if (formData.intervalDays === 0 || formData.status === 'No Calibration Necessary') {
       setFormData({
         ...formData,
         lastCompleted: todayStr,
@@ -150,11 +160,9 @@ const handleIntervalChange = (interval: number) => {
   };
 
   const today = new Date(todayStr);
-  
-  // Protect the date math from throwing NaN errors if nextDueDate is blank
   const currentDueDate = formData.nextDueDate ? new Date(formData.nextDueDate) : null;
-  const diffDays = currentDueDate 
-    ? Math.ceil((currentDueDate.getTime() - today.getTime()) / (1000 * 3600 * 24)) 
+  const diffDays = currentDueDate
+    ? Math.ceil((currentDueDate.getTime() - today.getTime()) / (1000 * 3600 * 24))
     : 0;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
@@ -289,24 +297,24 @@ const handleIntervalChange = (interval: number) => {
                 <Calendar className="w-3.5 h-3.5 text-slate-400" />
                 <span>2. Metrology Calibration Cycle & Due Dates</span>
               </h4>
-             <span
-  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-    formData.intervalDays === 0
-      ? 'bg-slate-100 text-slate-600 border-slate-300'
-      : diffDays < 0
-      ? 'bg-rose-100 text-rose-800 border-rose-300'
-      : diffDays <= 14
-      ? 'bg-amber-100 text-amber-800 border-amber-300'
-      : 'bg-emerald-100 text-emerald-800 border-emerald-300'
-  }`}
->
-  {formData.intervalDays === 0 
-    ? 'No calibration necessary' 
-    : diffDays < 0 
-      ? `${Math.abs(diffDays)}d Overdue` 
-      : `${diffDays}d Remaining`
-  }
-</span>
+              <span
+                id="asset-calibration-status-badge"
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  isNoCal
+                    ? 'bg-slate-100 text-slate-700 border-slate-300'
+                    : diffDays < 0
+                    ? 'bg-rose-100 text-rose-800 border-rose-300'
+                    : diffDays <= 14
+                    ? 'bg-amber-100 text-amber-800 border-amber-300'
+                    : 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                }`}
+              >
+                {isNoCal
+                  ? 'No calibration necessary'
+                  : diffDays < 0
+                  ? `${Math.abs(diffDays)}d Overdue`
+                  : `${diffDays}d Remaining`}
+              </span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -339,15 +347,24 @@ const handleIntervalChange = (interval: number) => {
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Next Due Date {autoCalculateDueDate && <span className="text-[10px] text-slate-400 font-normal">(Auto)</span>}
+                  Next Due Date {autoCalculateDueDate && !isNoCal && <span className="text-[10px] text-slate-400 font-normal">(Auto)</span>}
                 </label>
-                <input
-                  type="date"
-                  value={formData.nextDueDate}
-                  onChange={(e) => handleDueDateChange(e.target.value)}
-                  className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-xs focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
-                  required
-                />
+                {isNoCal ? (
+                  <input
+                    type="text"
+                    value="N/A - No calibration necessary"
+                    disabled
+                    className="w-full p-2 bg-slate-100 border border-slate-200 text-slate-500 rounded-lg text-xs cursor-not-allowed font-medium select-none"
+                  />
+                ) : (
+                  <input
+                    type="date"
+                    value={formData.nextDueDate}
+                    onChange={(e) => handleDueDateChange(e.target.value)}
+                    className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg font-mono text-xs focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-hidden"
+                    required
+                  />
+                )}
               </div>
             </div>
 
@@ -356,13 +373,26 @@ const handleIntervalChange = (interval: number) => {
                 <label className="block font-semibold text-slate-700 mb-1">Operational Status</label>
                 <select
                   value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value as AssetStatus })}
+                  onChange={(e) => {
+                    const newStatus = e.target.value as AssetStatus;
+                    if (newStatus === 'No Calibration Necessary') {
+                      setFormData({
+                        ...formData,
+                        status: newStatus,
+                        intervalDays: 0,
+                        nextDueDate: '',
+                      });
+                    } else {
+                      setFormData({ ...formData, status: newStatus });
+                    }
+                  }}
                   className="w-full p-2 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:bg-white focus:ring-2 focus:ring-sky-500 focus:outline-hidden cursor-pointer"
                 >
                   <option value="Operational / Calibrated">Operational / Calibrated</option>
                   <option value="Calibration Due Soon">Calibration Due Soon</option>
                   <option value="Cal Overdue">Cal Overdue</option>
                   <option value="Out of Service">Out of Service</option>
+                  <option value="No Calibration Necessary">No Calibration Necessary</option>
                 </select>
               </div>
 

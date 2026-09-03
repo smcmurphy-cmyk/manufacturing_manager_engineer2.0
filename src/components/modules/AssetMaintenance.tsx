@@ -69,16 +69,40 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
 
   const todayStr = '2026-08-30'; // reference app time
 
-  const getCalculatedDueInfo = (lastCompletedStr: string, intervalDays: number, manualDueDate?: string) => {
+  const getCalculatedDueInfo = (
+    lastCompletedStr: string,
+    intervalDays: number,
+    manualDueDate?: string,
+    recordedStatus?: AssetStatus
+  ) => {
+    // When interval is 0 or document selects 'No Calibration Necessary', status in registry is 'Operational / Calibrated'
+    if (Number(intervalDays) === 0 || recordedStatus === 'No Calibration Necessary') {
+      return {
+        dueDateStr: 'N/A',
+        diffDays: 9999,
+        status: 'Operational / Calibrated' as AssetStatus,
+        isExempt: true,
+      };
+    }
+
     const today = new Date(todayStr);
     let dueDate: Date;
 
-    if (manualDueDate) {
+    if (manualDueDate && manualDueDate.trim() !== '') {
       dueDate = new Date(manualDueDate);
     } else {
-      const last = new Date(lastCompletedStr);
+      const last = new Date(lastCompletedStr || todayStr);
       dueDate = new Date(last);
-      dueDate.setDate(dueDate.getDate() + intervalDays);
+      dueDate.setDate(dueDate.getDate() + (intervalDays || 365));
+    }
+
+    if (isNaN(dueDate.getTime())) {
+      return {
+        dueDateStr: 'N/A',
+        diffDays: 9999,
+        status: 'Operational / Calibrated' as AssetStatus,
+        isExempt: true,
+      };
     }
 
     const diffTime = dueDate.getTime() - today.getTime();
@@ -95,11 +119,12 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
       dueDateStr: dueDate.toISOString().split('T')[0],
       diffDays,
       status,
+      isExempt: false,
     };
   };
 
   const filteredAssets = assets.filter((asset) => {
-    const info = getCalculatedDueInfo(asset.lastCompleted, asset.intervalDays, asset.nextDueDate);
+    const info = getCalculatedDueInfo(asset.lastCompleted, asset.intervalDays, asset.nextDueDate, asset.status);
     const matchesSearch =
       asset.assetId.toLowerCase().includes(searchTerm.toLowerCase()) ||
       asset.equipmentDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -110,12 +135,18 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
     return matchesSearch && matchesStatus;
   });
 
-  const operationalAssets = assets.filter((a) => getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate).diffDays > 14);
-  const dueSoonAssets = assets.filter((a) => {
-    const diff = getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate).diffDays;
-    return diff >= 0 && diff <= 14;
+  const operationalAssets = assets.filter((a) => {
+    const info = getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status);
+    return info.status === 'Operational / Calibrated';
   });
-  const overdueAssets = assets.filter((a) => getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate).diffDays < 0);
+  const dueSoonAssets = assets.filter((a) => {
+    const info = getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status);
+    return info.status === 'Calibration Due Soon';
+  });
+  const overdueAssets = assets.filter((a) => {
+    const info = getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status);
+    return info.status === 'Cal Overdue';
+  });
 
   // New Asset Form State
   const [newAsset, setNewAsset] = useState({
@@ -160,12 +191,15 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
       intervalDays: 365,
       lastCompleted: todayStr,
       assignedOwner: 'Steven McMurphy (Quality Metrology Lead)',
-      alertEmail: 'Smcmurphy@gmail.com',
+      alertEmail: 'murphy@dyneng.com',
       serialNumber: `SN-${Math.floor(10000 + Math.random() * 90000)}`,
     });
   };
 
   const getStatusBadgeClass = (status: AssetStatus, diffDays: number) => {
+    if (status === 'Operational / Calibrated') {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold';
+    }
     if (diffDays < 0 || status === 'Cal Overdue') {
       return 'bg-rose-100 text-rose-800 border-rose-300 font-bold';
     }
@@ -427,7 +461,7 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {filteredAssets.map((asset) => {
-                    const info = getCalculatedDueInfo(asset.lastCompleted, asset.intervalDays, asset.nextDueDate);
+                    const info = getCalculatedDueInfo(asset.lastCompleted, asset.intervalDays, asset.nextDueDate, asset.status);
                     const isExpanded = expandedAssetId === asset.id;
 
                     return (
@@ -459,7 +493,9 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                             <div className="text-[10px] font-mono text-slate-400 mt-0.5">SN: {asset.serialNumber}</div>
                           </td>
                           <td className="py-3.5 px-3.5 align-top whitespace-nowrap">
-                            <span className="font-semibold text-slate-700">{asset.intervalDays} Days</span>
+                            <span className="font-semibold text-slate-700">
+                              {Number(asset.intervalDays) === 0 ? 'No Cal Needed' : `${asset.intervalDays} Days`}
+                            </span>
                           </td>
                           <td className="py-3.5 px-3.5 align-top font-mono text-slate-600 whitespace-nowrap">
                             {asset.lastCompleted}
@@ -468,14 +504,18 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                             <span className="font-bold text-slate-900">{info.dueDateStr}</span>
                             <div
                               className={`text-[10px] font-sans mt-0.5 font-semibold ${
-                                info.diffDays < 0
+                                info.isExempt
+                                  ? 'text-slate-500'
+                                  : info.diffDays < 0
                                   ? 'text-rose-600'
                                   : info.diffDays <= 14
                                   ? 'text-amber-600'
                                   : 'text-slate-500'
                               }`}
                             >
-                              {info.diffDays < 0
+                              {info.isExempt
+                                ? 'No calibration necessary'
+                                : info.diffDays < 0
                                 ? `${Math.abs(info.diffDays)} days overdue`
                                 : `${info.diffDays} days remaining`}
                             </div>
@@ -487,9 +527,10 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                                 info.diffDays
                               )}`}
                             >
-                              {info.diffDays < 0 && <AlertTriangle className="w-3 h-3" />}
-                              {info.diffDays >= 0 && info.diffDays <= 14 && <Clock className="w-3 h-3" />}
-                              {info.diffDays > 14 && <CheckCircle2 className="w-3 h-3" />}
+                              {info.status === 'Operational / Calibrated' && <CheckCircle2 className="w-3 h-3 text-emerald-600" />}
+                              {info.status === 'Cal Overdue' && <AlertTriangle className="w-3 h-3 text-rose-600" />}
+                              {info.status === 'Calibration Due Soon' && <Clock className="w-3 h-3 text-amber-600" />}
+                              {info.status === 'Out of Service' && <AlertTriangle className="w-3 h-3 text-slate-600" />}
                               {info.status}
                             </span>
                           </td>
@@ -571,7 +612,7 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
 
               <div className="divide-y divide-slate-100 text-xs">
                 {assets.map((asset) => {
-                  const info = getCalculatedDueInfo(asset.lastCompleted, asset.intervalDays, asset.nextDueDate);
+                  const info = getCalculatedDueInfo(asset.lastCompleted, asset.intervalDays, asset.nextDueDate, asset.status);
                   return (
                     <div key={asset.id} className="p-4 hover:bg-slate-50/60 transition-colors flex flex-col md:flex-row md:items-center justify-between gap-4">
                       <div className="space-y-1 max-w-xl">
@@ -586,9 +627,9 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                         <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-x-4 gap-y-1">
                           <span>Location: <strong className="text-slate-700">{asset.departmentLocation}</strong></span>
                           <span>S/N: <strong className="font-mono text-slate-700">{asset.serialNumber}</strong></span>
-                          <span>Interval: <strong className="text-slate-700">{asset.intervalDays} Days</strong></span>
+                          <span>Interval: <strong className="text-slate-700">{Number(asset.intervalDays) === 0 ? 'No Cal Needed' : `${asset.intervalDays} Days`}</strong></span>
                           <span>Last Cal: <strong className="font-mono text-slate-700">{asset.lastCompleted}</strong></span>
-                          <span>Next Due: <strong className="font-mono text-slate-900">{info.dueDateStr}</strong></span>
+                          <span>Next Due: <strong className="font-mono text-slate-900">{info.isExempt ? 'N/A (No Cal Necessary)' : info.dueDateStr}</strong></span>
                         </div>
                         <div className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-200 mt-1 font-mono">
                           NIST Master Traceability: Fluke 5522A / Keysight Reference | Cal Stamp: #MET-7740 (Steven McMurphy)
@@ -701,6 +742,7 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                     onChange={(e) => setNewAsset({ ...newAsset, intervalDays: Number(e.target.value) })}
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded focus:bg-white focus:ring-2 focus:ring-sky-500 cursor-pointer"
                   >
+                    <option value={0}>No calibration needed</option>
                     <option value={90}>90 Days (Quarterly / Thermal Profiler)</option>
                     <option value={180}>180 Days (Semi-Annual / ESD System)</option>
                     <option value={365}>365 Days (Annual / Metrology Tool)</option>

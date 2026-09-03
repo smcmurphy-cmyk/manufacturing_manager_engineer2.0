@@ -49,15 +49,17 @@ export const AssetCalibrationModal: React.FC<AssetCalibrationModalProps> = ({
   const nextDueDate = asset.nextDueDate ? new Date(asset.nextDueDate) : new Date(lastCalDate.getTime() + asset.intervalDays * 24 * 3600 * 1000);
   const diffDays = Math.ceil((nextDueDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
 
+  const isNoCal = Number(asset.intervalDays) === 0 || asset.status === 'No Calibration Necessary';
+
   let status: AssetStatus = 'Operational / Calibrated';
 
-if (asset.intervalDays === 0) {
-  status = 'No Calibration Necessary';
-} else if (diffDays < 0) {
-  status = 'Cal Overdue';
-} else if (diffDays <= 14) {
-  status = 'Calibration Due Soon';
-}
+  if (isNoCal) {
+    status = 'Operational / Calibrated';
+  } else if (diffDays < 0) {
+    status = 'Cal Overdue';
+  } else if (diffDays <= 14) {
+    status = 'Calibration Due Soon';
+  }
 
   const certNumber = `CAL-CERT-2026-${asset.assetId.replace(/[^a-zA-Z0-9]/g, '')}`;
 
@@ -238,7 +240,11 @@ if (asset.intervalDays === 0) {
             <div className="space-y-2 sm:border-l sm:border-slate-200 sm:pl-4">
               <div>
                 <span className="text-[10px] uppercase font-semibold text-slate-500">Calibration Interval</span>
-                <p className="font-bold text-slate-800">{asset.intervalDays} Days ({asset.intervalDays === 365 ? 'Annual' : asset.intervalDays === 180 ? 'Semi-Annual' : asset.intervalDays === 90 ? 'Quarterly' : 'Periodic'})</p>
+                <p className="font-bold text-slate-800">
+                  {isNoCal
+                    ? 'No Calibration Needed (Exempt)'
+                    : `${asset.intervalDays} Days (${asset.intervalDays === 365 ? 'Annual' : asset.intervalDays === 180 ? 'Semi-Annual' : asset.intervalDays === 90 ? 'Quarterly' : 'Periodic'})`}
+                </p>
               </div>
               <div>
                 <span className="text-[10px] uppercase font-semibold text-slate-500">Last Calibrated Date</span>
@@ -247,17 +253,21 @@ if (asset.intervalDays === 0) {
               <div>
                 <span className="text-[10px] uppercase font-semibold text-slate-500">Next Recalibration Due</span>
                 <div className="flex items-center gap-2">
-                  <span className="font-mono font-bold text-slate-900">{asset.nextDueDate || nextDueDate.toISOString().split('T')[0]}</span>
+                  <span className="font-mono font-bold text-slate-900">
+                    {isNoCal ? 'N/A' : asset.nextDueDate || nextDueDate.toISOString().split('T')[0]}
+                  </span>
                   <span
                     className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-                      diffDays < 0
+                      isNoCal
+                        ? 'bg-slate-100 text-slate-700 border-slate-300'
+                        : diffDays < 0
                         ? 'bg-rose-100 text-rose-800 border-rose-300'
                         : diffDays <= 14
                         ? 'bg-amber-100 text-amber-800 border-amber-300'
                         : 'bg-emerald-100 text-emerald-800 border-emerald-300'
                     }`}
                   >
-                    {diffDays < 0 ? `${Math.abs(diffDays)}d Overdue` : `${diffDays}d Remaining`}
+                    {isNoCal ? 'No calibration necessary' : diffDays < 0 ? `${Math.abs(diffDays)}d Overdue` : `${diffDays}d Remaining`}
                   </span>
                 </div>
               </div>
