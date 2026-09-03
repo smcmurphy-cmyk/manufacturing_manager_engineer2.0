@@ -81,7 +81,18 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
     }
   };
 
-  const handleIntervalChange = (interval: number) => {
+const handleIntervalChange = (interval: number) => {
+    // Intercept the 0 interval immediately
+    if (interval === 0) {
+      setFormData({
+        ...formData,
+        intervalDays: 0,
+        nextDueDate: '', // Wipe out the next due date
+        status: 'No Calibration Necessary', // Override status directly
+      });
+      return; 
+    }
+
     if (autoCalculateDueDate) {
       const nextDue = calculateDueDate(formData.lastCompleted, interval);
       const computedStatus = getComputedStatus(nextDue);
@@ -110,6 +121,17 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
   };
 
   const handleStampCalibratedToday = () => {
+    // If set to no calibration, just stamp the last completed date but don't set a next due date
+    if (formData.intervalDays === 0) {
+      setFormData({
+        ...formData,
+        lastCompleted: todayStr,
+        nextDueDate: '',
+        status: 'No Calibration Necessary',
+      });
+      return;
+    }
+
     const nextDue = calculateDueDate(todayStr, formData.intervalDays);
     setFormData({
       ...formData,
@@ -128,9 +150,12 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
   };
 
   const today = new Date(todayStr);
-  const currentDueDate = new Date(formData.nextDueDate);
-  const diffDays = Math.ceil((currentDueDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
-
+  
+  // Protect the date math from throwing NaN errors if nextDueDate is blank
+  const currentDueDate = formData.nextDueDate ? new Date(formData.nextDueDate) : null;
+  const diffDays = currentDueDate 
+    ? Math.ceil((currentDueDate.getTime() - today.getTime()) / (1000 * 3600 * 24)) 
+    : 0;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-xs overflow-y-auto">
       <div className="w-full max-w-2xl my-6 bg-white rounded-xl shadow-2xl border border-slate-300 overflow-hidden animate-fade-in text-slate-800">
