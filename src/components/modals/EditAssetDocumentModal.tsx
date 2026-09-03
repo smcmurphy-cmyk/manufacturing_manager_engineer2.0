@@ -12,8 +12,7 @@ import {
   UserCheck,
   Mail,
   ShieldCheck,
-  Layers,
-  FileText
+  Layers
 } from 'lucide-react';
 import { AssetRecord, AssetStatus } from '../../types';
 
@@ -22,7 +21,6 @@ interface EditAssetDocumentModalProps {
   asset: AssetRecord | null;
   onClose: () => void;
   onSave: (updatedAsset: AssetRecord) => void;
-  onOpenCertificate?: (asset: AssetRecord) => void;
 }
 
 export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
@@ -30,7 +28,6 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
   asset,
   onClose,
   onSave,
-  onOpenCertificate,
 }) => {
   const todayStr = '2026-08-30';
 
@@ -214,20 +211,6 @@ export const EditAssetDocumentModal: React.FC<EditAssetDocumentModalProps> = ({
               <RotateCw className="w-3 h-3 text-emerald-700" />
               <span>Stamp Calibrated Today ({todayStr})</span>
             </button>
-
-            {onOpenCertificate && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenCertificate(formData);
-                }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-300 rounded transition-colors cursor-pointer"
-              >
-                <FileText className="w-3 h-3 text-sky-600" />
-                <span>View Certificate</span>
-              </button>
-            )}
           </div>
         </div>
 

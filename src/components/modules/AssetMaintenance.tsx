@@ -14,21 +14,17 @@ import {
   Send,
   RefreshCw,
   SlidersHorizontal,
-  FileText,
   FileEdit,
   ShieldCheck,
-  Award,
   X,
   FileCheck,
   ChevronDown,
   ChevronUp,
   UserCheck,
   Layers,
-  ArrowUpRight,
-  Printer
+  ArrowUpRight
 } from 'lucide-react';
 import { AssetRecord, AssetStatus } from '../../types';
-import { AssetCalibrationModal } from '../modals/AssetCalibrationModal';
 import { EditAssetDocumentModal } from '../modals/EditAssetDocumentModal';
 
 interface AssetMaintenanceProps {
@@ -50,7 +46,6 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [selectedAssetForCert, setSelectedAssetForCert] = useState<AssetRecord | null>(null);
   const [selectedAssetForEdit, setSelectedAssetForEdit] = useState<AssetRecord | null>(null);
   const [expandedAssetId, setExpandedAssetId] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -535,27 +530,15 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                             </span>
                           </td>
                           <td className="py-3.5 px-3.5 align-top whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedAssetForCert(asset)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:text-slate-900 bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-2xs transition-colors cursor-pointer"
-                                title="View & Print Official Calibration Certificate"
-                              >
-                                <FileText className="w-3 h-3 text-sky-600" />
-                                <span>Certificate</span>
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => setSelectedAssetForEdit(asset)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:text-sky-800 hover:bg-sky-50 border border-sky-200 rounded transition-colors cursor-pointer"
-                                title="Open & Edit Calibration Document Data"
-                              >
-                                <FileEdit className="w-3 h-3 text-sky-600" />
-                                <span>Edit Document</span>
-                              </button>
-                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedAssetForEdit(asset)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold text-sky-700 hover:text-sky-800 hover:bg-sky-50 border border-sky-200 rounded transition-colors cursor-pointer"
+                              title="Open & Edit Calibration Document Data"
+                            >
+                              <FileEdit className="w-3 h-3 text-sky-600" />
+                              <span>Edit Document</span>
+                            </button>
                           </td>
                         </tr>
 
@@ -637,15 +620,6 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedAssetForCert(asset)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded shadow-2xs transition-colors cursor-pointer"
-                        >
-                          <FileText className="w-3.5 h-3.5 text-sky-600" />
-                          <span>View Full Certificate</span>
-                        </button>
-
                         <button
                           type="button"
                           onClick={() => setSelectedAssetForEdit(asset)}
@@ -805,21 +779,6 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
       )}
 
       {/* ========================================================================= */}
-      {/* OPTIONAL DOCUMENT MODAL: Calibration Certificate (Triggered via Cert btn) */}
-      {/* ========================================================================= */}
-      <AssetCalibrationModal
-        isOpen={Boolean(selectedAssetForCert)}
-        asset={selectedAssetForCert}
-        onClose={() => setSelectedAssetForCert(null)}
-        onRecalibrate={(id) => {
-          onRecalibrate(id);
-          showToast('Calibration verified & certificate updated to today');
-        }}
-        onOpenAlertModal={onOpenAlertModal}
-        onEditDocument={(asset) => setSelectedAssetForEdit(asset)}
-      />
-
-      {/* ========================================================================= */}
       {/* DOCUMENT EDITOR MODAL: Edit Asset & Calibration Document Data             */}
       {/* ========================================================================= */}
       <EditAssetDocumentModal
@@ -827,7 +786,6 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
         asset={selectedAssetForEdit}
         onClose={() => setSelectedAssetForEdit(null)}
         onSave={handleSaveAssetDocument}
-        onOpenCertificate={(asset) => setSelectedAssetForCert(asset)}
       />
     </div>
   );
