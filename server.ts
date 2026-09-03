@@ -68,66 +68,24 @@ function ensureDirectoryExistence(filePath: string) {
   fs.mkdirSync(dirname);
 }
 
-function loadArchiveLog(): ArchiveLogItem[] {
+function loadJsonLog<T = any>(filePath: string): T[] {
   try {
-    if (fs.existsSync(LOG_FILE_PATH)) {
-      const data = fs.readFileSync(LOG_FILE_PATH, 'utf-8');
+    if (fs.existsSync(filePath)) {
+      const data = fs.readFileSync(filePath, 'utf-8');
       return JSON.parse(data);
     }
   } catch (err) {
-    console.error('Error loading archive log:', err);
+    console.error(`Error loading log at ${filePath}:`, err);
   }
   return [];
 }
 
-function saveArchiveLog(items: ArchiveLogItem[]) {
+function saveJsonLog<T = any>(filePath: string, items: T[]) {
   try {
-    ensureDirectoryExistence(LOG_FILE_PATH);
-    fs.writeFileSync(LOG_FILE_PATH, JSON.stringify(items, null, 2), 'utf-8');
+    ensureDirectoryExistence(filePath);
+    fs.writeFileSync(filePath, JSON.stringify(items, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error saving archive log:', err);
-  }
-}
-
-function loadAuditArchiveLog(): any[] {
-  try {
-    if (fs.existsSync(AUDIT_LOG_FILE_PATH)) {
-      const data = fs.readFileSync(AUDIT_LOG_FILE_PATH, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch (err) {
-    console.error('Error loading audit archive log:', err);
-  }
-  return [];
-}
-
-function saveAuditArchiveLog(items: any[]) {
-  try {
-    ensureDirectoryExistence(AUDIT_LOG_FILE_PATH);
-    fs.writeFileSync(AUDIT_LOG_FILE_PATH, JSON.stringify(items, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Error saving audit archive log:', err);
-  }
-}
-
-function loadNcrArchiveLog(): any[] {
-  try {
-    if (fs.existsSync(NCR_LOG_FILE_PATH)) {
-      const data = fs.readFileSync(NCR_LOG_FILE_PATH, 'utf-8');
-      return JSON.parse(data);
-    }
-  } catch (err) {
-    console.error('Error loading NCR archive log:', err);
-  }
-  return [];
-}
-
-function saveNcrArchiveLog(items: any[]) {
-  try {
-    ensureDirectoryExistence(NCR_LOG_FILE_PATH);
-    fs.writeFileSync(NCR_LOG_FILE_PATH, JSON.stringify(items, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Error saving NCR archive log:', err);
+    console.error(`Error saving log at ${filePath}:`, err);
   }
 }
 
@@ -194,30 +152,39 @@ async function startServer() {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
-  // 2. Server Host Info & Default Storage Path
-  app.get('/api/fai/server-info', (req, res) => {
+  // 2. Unified Server Host Info & Storage Paths
+  app.get('/api/:module/server-info', (req, res) => {
+    const { module } = req.params; // 'fai', 'audits', or 'ncrs'
     const isWindows = process.platform === 'win32';
-    const defaultSuggested = DEFAULT_STORAGE_DIR;
+
+    // Map the URL parameter to the correct default directories
+    const dirMap: Record<string, { defaultDir: string; folderName: string }> = {
+      fai: { defaultDir: DEFAULT_STORAGE_DIR, folderName: 'FAI' },
+      audits: { defaultDir: DEFAULT_AUDIT_STORAGE_DIR, folderName: 'Audits' },
+      ncrs: { defaultDir: DEFAULT_NCR_STORAGE_DIR, folderName: 'NCRs' },
+    };
+
+    const config = dirMap[module.toLowerCase()] || dirMap['fai'];
 
     res.json({
-      defaultStorageDir: defaultSuggested,
+      defaultStorageDir: config.defaultDir,
       baseReportsDir: BASE_REPORTS_DIR,
       platform: process.platform,
       hostname: os.hostname(),
       appDirectory: process.cwd(),
       commonPaths: isWindows
         ? [
-            `${BASE_REPORTS_DIR}\\FAI`,
+            `${BASE_REPORTS_DIR}\\${config.folderName}`,
+            `${BASE_REPORTS_DIR}\\Compliance`,
             BASE_REPORTS_DIR,
-            'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\FAI',
-            'C:\\Reports\\FAI_Records',
-            '.\\saved_reports\\fai',
+            `C:\\Apps\\Reports\\${config.folderName}`,
+            `C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\${config.folderName}`,
+            `.\\saved_reports\\${module.toLowerCase()}`,
           ]
         : [
-            `${BASE_REPORTS_DIR}/FAI`,
-            '/var/log/fai-reports',
-            '/opt/factory/fai_archive',
-            './saved_reports/fai',
+            `${BASE_REPORTS_DIR}/${config.folderName}`,
+            `/var/log/${module.toLowerCase()}-reports`,
+            `./saved_reports/${module.toLowerCase()}`,
           ],
     });
   });
@@ -302,7 +269,7 @@ async function startServer() {
       });
 
       // Maintain legacy JSON archive log for backwards compatibility
-      const history = loadArchiveLog();
+      const history = loadJsonLog<ArchiveLogItem>(LOG_FILE_PATH);
       const legacyRecord: ArchiveLogItem = {
         id: archiveRecord.record_id,
         jobId: jobData?.jobId || 'N/A',
@@ -321,7 +288,7 @@ async function startServer() {
       };
 
       history.unshift(legacyRecord);
-      saveArchiveLog(history.slice(0, 100)); // keep last 100 records
+      saveJsonLog(LOG_FILE_PATH, history.slice(0, 100)); // keep last 100 records
 
       return res.json({
         success: true,
@@ -364,7 +331,7 @@ async function startServer() {
       }));
 
       // Combine with local legacy history if any
-      const legacyHistory = loadArchiveLog();
+      const legacyHistory = loadJsonLog<ArchiveLogItem>(LOG_FILE_PATH);
       const seenIds = new Set(history.map((h) => h.id));
       for (const item of legacyHistory) {
         if (!seenIds.has(item.id)) {
@@ -374,7 +341,7 @@ async function startServer() {
 
       res.json({ history });
     } catch (e: any) {
-      const history = loadArchiveLog();
+      const history = loadJsonLog<ArchiveLogItem>(LOG_FILE_PATH);
       res.json({ history });
     }
   });
@@ -382,7 +349,7 @@ async function startServer() {
   // 6. Download Saved Archive directly from host
   app.get('/api/fai/download/:id', (req, res) => {
     const { id } = req.params;
-    const history = loadArchiveLog();
+    const history = loadJsonLog<ArchiveLogItem>(LOG_FILE_PATH);
     const item = history.find((h) => h.id === id);
 
     if (!item || !fs.existsSync(item.fullPath)) {
@@ -392,36 +359,7 @@ async function startServer() {
     res.download(item.fullPath, item.fileName);
   });
 
-  // 7. Audit Server Info & Storage Path
-  app.get('/api/audits/server-info', (req, res) => {
-    const isWindows = process.platform === 'win32';
-    const defaultSuggested = DEFAULT_AUDIT_STORAGE_DIR;
-
-    res.json({
-      defaultStorageDir: defaultSuggested,
-      baseReportsDir: BASE_REPORTS_DIR,
-      platform: process.platform,
-      hostname: os.hostname(),
-      appDirectory: process.cwd(),
-      commonPaths: isWindows
-        ? [
-            `${BASE_REPORTS_DIR}\\Audits`,
-            `${BASE_REPORTS_DIR}\\Compliance`,
-            BASE_REPORTS_DIR,
-            'C:\\Apps\\Reports\\Audits',
-            'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\Audits',
-            '.\\saved_reports\\audits',
-          ]
-        : [
-            `${BASE_REPORTS_DIR}/Audits`,
-            `${BASE_REPORTS_DIR}/Compliance`,
-            '/var/log/audit-reports',
-            './saved_reports/audits',
-          ],
-    });
-  });
-
-  // 8. Save Audit PDF to Host Server Location (Dual-Storage)
+  // 7. Save Audit PDF to Host Server Location (Dual-Storage)
   app.post('/api/audits/save-pdf', async (req, res) => {
     try {
       const {
@@ -465,7 +403,7 @@ async function startServer() {
       });
 
       // Record to audit archive log
-      const history = loadAuditArchiveLog();
+      const history = loadJsonLog(AUDIT_LOG_FILE_PATH);
       const newRecord = {
         id: archiveRecord.record_id,
         auditId: auditData?.id || 'N/A',
@@ -483,7 +421,7 @@ async function startServer() {
       };
 
       history.unshift(newRecord);
-      saveAuditArchiveLog(history.slice(0, 100));
+      saveJsonLog(AUDIT_LOG_FILE_PATH, history.slice(0, 100));
 
       return res.json({
         success: true,
@@ -560,37 +498,7 @@ async function startServer() {
     }
   });
 
-  // 10. NCR Server Info & Storage Path
-  app.get('/api/ncrs/server-info', (req, res) => {
-    const isWindows = process.platform === 'win32';
-    const defaultSuggested = DEFAULT_NCR_STORAGE_DIR;
-
-    res.json({
-      defaultStorageDir: defaultSuggested,
-      baseReportsDir: BASE_REPORTS_DIR,
-      platform: process.platform,
-      hostname: os.hostname(),
-      appDirectory: process.cwd(),
-      commonPaths: isWindows
-        ? [
-            `${BASE_REPORTS_DIR}\\NCRs`,
-            `${BASE_REPORTS_DIR}\\Compliance`,
-            `${BASE_REPORTS_DIR}\\QA`,
-            BASE_REPORTS_DIR,
-            'C:\\Apps\\Reports\\NCRs',
-            'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\NCRs',
-            '.\\saved_reports\\ncrs',
-          ]
-        : [
-            `${BASE_REPORTS_DIR}/NCRs`,
-            `${BASE_REPORTS_DIR}/Compliance`,
-            '/var/log/ncr-reports',
-            './saved_reports/ncrs',
-          ],
-    });
-  });
-
-  // 11. Save NCR PDF to Host Server Location (Dual-Storage)
+  // 9. Save NCR PDF to Host Server Location (Dual-Storage)
   app.post('/api/ncrs/save-pdf', async (req, res) => {
     try {
       const {
@@ -636,7 +544,7 @@ async function startServer() {
       });
 
       // Record to NCR archive log
-      const history = loadNcrArchiveLog();
+      const history = loadJsonLog(NCR_LOG_FILE_PATH);
       const newRecord = {
         id: archiveRecord.record_id,
         ncrId: ncrData?.id || 'N/A',
@@ -657,7 +565,7 @@ async function startServer() {
       };
 
       history.unshift(newRecord);
-      saveNcrArchiveLog(history.slice(0, 100));
+      saveJsonLog(NCR_LOG_FILE_PATH, history.slice(0, 100));
 
       return res.json({
         success: true,
