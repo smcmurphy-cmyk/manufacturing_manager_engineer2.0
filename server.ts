@@ -6,6 +6,7 @@ import os from 'os';
 import { createServer as createViteServer } from 'vite';
 import {
   supabase,
+  getSupabase,
   isDatabaseConnected,
   insertDocumentArchive,
   getDocumentArchives,
@@ -602,6 +603,53 @@ async function startServer() {
       supabaseConfigured: connected,
       baseReportsDir: BASE_REPORTS_DIR,
     });
+  });
+
+  // Diagnostic Endpoint to test Supabase 'asset_registry' table directly
+  app.get('/api/db/test-asset-registry', async (req, res) => {
+    const client = getSupabase();
+    if (!client) {
+      return res.json({
+        success: false,
+        message: 'Supabase client is not initialized. Please verify SUPABASE_URL and SUPABASE_ANON_KEY in your environment.',
+        connected: false,
+      });
+    }
+
+    try {
+      // 1. Attempt to query 'asset_registry'
+      const { data, error, count } = await client
+        .from('asset_registry')
+        .select('*', { count: 'exact' })
+        .limit(3);
+
+      if (error) {
+        return res.status(500).json({
+          success: false,
+          message: 'Error communicating with Supabase table "asset_registry"',
+          error: {
+            message: error.message,
+            code: error.code,
+            details: error.details,
+            hint: error.hint,
+          },
+          tableNameChecked: 'asset_registry',
+        });
+      }
+
+      return res.json({
+        success: true,
+        message: 'Successfully connected and queried "asset_registry" in Supabase!',
+        tableName: 'asset_registry',
+        rowCount: count,
+        sampleRows: data,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        message: `Unexpected exception testing table: ${err.message}`,
+      });
+    }
   });
 
   // --- Asset Calibration Registry ---
