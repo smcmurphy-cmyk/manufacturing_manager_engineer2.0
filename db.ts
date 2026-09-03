@@ -216,42 +216,77 @@ export async function saveAllAssets(assets: AssetRecord[]): Promise<void> {
   writeLocalJson('assets.json', assets);
 
   if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const payload = assets.map((a) => ({
-        id: a.id,
-        asset_id: a.assetId,
-        equipment_description: a.equipmentDescription,
-        department_location: a.departmentLocation,
-        interval_days: a.intervalDays,
-        last_completed: a.lastCompleted,
-        next_due_date: a.nextDueDate,
-        status: a.status,
-        assigned_owner: a.assignedOwner,
-        alert_email: a.alertEmail,
-        serial_number: a.serialNumber,
-        updated_at: new Date().toISOString(),
-      }));
+    const payload = assets.map((a) => ({
+      id: a.id,
+      asset_id: a.assetId,
+      equipment_description: a.equipmentDescription,
+      department_location: a.departmentLocation,
+      interval_days: a.intervalDays,
+      // Convert empty strings to null so Postgres doesn't crash
+      last_completed: a.lastCompleted || null, 
+      next_due_date: a.nextDueDate || null,
+      status: a.status,
+      assigned_owner: a.assignedOwner,
+      alert_email: a.alertEmail,
+      serial_number: a.serialNumber,
+      updated_at: new Date().toISOString(),
+    }));
 
-      await supabaseInstance.from('asset_registry').upsert(payload, { onConflict: 'id' });
-    } catch (err) {
-      console.warn('Failed to upsert assets to Supabase:', err);
+    // Extract the error object directly from the Supabase response
+    const { error } = await supabaseInstance
+      .from('asset_registry')
+      .upsert(payload, { onConflict: 'id' });
+
+    // Log the exact Postgres rejection reason if it fails
+    if (error) {
+      console.error('❌ Supabase Postgres Error (saveAllAssets):', error.message, error.details);
+    } else {
+      console.log('✅ Supabase sync successful.');
     }
   }
 }
 
 export async function updateSingleAsset(asset: AssetRecord): Promise<AssetRecord> {
-  const currentAssets = await getAssets();
-  const index = currentAssets.findIndex((a) => a.id === asset.id);
-  let updatedList: AssetRecord[];
-  if (index >= 0) {
-    updatedList = currentAssets.map((a) => (a.id === asset.id ? asset : a));
-  } else {
-    updatedList = [asset, ...currentAssets];
+  // 1. Save directly to Supabase first for efficiency (no need to fetch the whole table)
+  if (isSupabaseConfigured && supabaseInstance) {
+    const payload = {
+      id: asset.id,
+      asset_id: asset.assetId,
+      equipment_description: asset.equipmentDescription,
+      department_location: asset.departmentLocation,
+      interval_days: asset.intervalDays,
+      last_completed: asset.lastCompleted || null,
+      next_due_date: asset.nextDueDate || null,
+      status: asset.status,
+      assigned_owner: asset.assignedOwner,
+      alert_email: asset.alertEmail,
+      serial_number: asset.serialNumber,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabaseInstance
+      .from('asset_registry')
+      .upsert([payload], { onConflict: 'id' });
+
+    if (error) {
+      console.error('❌ Supabase Postgres Error (updateSingleAsset):', error.message, error.details);
+    }
   }
-  await saveAllAssets(updatedList);
+
+  // 2. Keep the local JSON file synced in the background
+  const currentAssets = readLocalJson<AssetRecord[]>('assets.json', []);
+  const index = currentAssets.findIndex((a) => a.id === asset.id);
+  
+  if (index >= 0) {
+    currentAssets[index] = asset;
+  } else {
+    currentAssets.unshift(asset);
+  }
+  
+  writeLocalJson('assets.json', currentAssets);
+  
   return asset;
 }
-
 // -------------------------------------------------------------
 // 3. Non-Conformance Reports (NCRs)
 // -------------------------------------------------------------
