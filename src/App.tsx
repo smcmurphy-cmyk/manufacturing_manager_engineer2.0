@@ -15,7 +15,6 @@ import { DataIngestion } from './components/modules/DataIngestion';
 import { AssetMaintenance } from './components/modules/AssetMaintenance';
 import { QuarterlyReporting } from './components/modules/QuarterlyReporting';
 import { AlertsModal } from './components/modals/AlertsModal';
-import { MarkdownExportModal } from './components/modals/MarkdownExportModal';
 import { buildLiveQ3QuarterlyDocuments } from './utils/quarterlyData';
 
 // Local storage cache keys for zero-latency instant reload
@@ -525,16 +524,6 @@ export default function App() {
         assets={assets}
         training={training}
         audits={audits}
-      />
-
-      <MarkdownExportModal
-        isOpen={isExportModalOpen}
-        onClose={() => setIsExportModalOpen(false)}
-        ncrs={ncrs}
-        audits={audits}
-        training={training}
-        jobs={jobs}
-        assets={assets}
       />
     </div>
   );
