@@ -1,13 +1,4 @@
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import fs from 'fs';
-import path from 'path';
-import {
-  INITIAL_ASSETS,
-  INITIAL_NCRS,
-  INITIAL_AUDITS,
-  INITIAL_TRAINING,
-  INITIAL_JOBS,
-} from './src/data/initialData';
+import sql from 'mssql';
 import {
   AssetRecord,
   NCRRecord,
@@ -16,83 +7,49 @@ import {
   EngineeringJob,
 } from './src/types';
 
-// Helper to validate HTTP or HTTPS URL format
-function isValidHttpUrl(stringUrl: string): boolean {
-  if (!stringUrl || typeof stringUrl !== 'string') return false;
-  const trimmed = stringUrl.trim();
-  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+const config: sql.config = {
+  user: process.env.DB_USER || 'sa',
+  password: process.env.DB_PASSWORD || '',
+  server: process.env.DB_SERVER || 'localhost',
+  database: process.env.DB_NAME || 'DynamicEngineeringQMS',
+  port: parseInt(process.env.DB_PORT || '1433', 10),
+  options: {
+    encrypt: process.env.DB_ENCRYPT === 'true',
+    trustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+  },
+  pool: {
+    max: 10,
+    min: 2,
+    idleTimeoutMillis: 30000,
+  },
+};
+
+let pool: sql.ConnectionPool | null = null;
+
+export async function getPool(): Promise<sql.ConnectionPool> {
+  if (!pool) {
+    pool = await new sql.ConnectionPool(config).connect();
+    pool.on('error', (err) => {
+      console.error('SQL Connection Pool Error:', err);
+      pool = null;
+    });
+  }
+  return pool;
+}
+
+export async function isDatabaseConnected(): Promise<boolean> {
+  try {
+    const p = await getPool();
+    const result = await p.request().query('SELECT 1 AS connected');
+    return result.recordset[0]?.connected === 1;
+  } catch (err) {
+    console.error('Database connection test failed:', err);
     return false;
-  }
-  try {
-    const parsed = new URL(trimmed);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-// Environment credentials for Supabase
-const rawSupabaseUrl = process.env.SUPABASE_URL || '';
-const rawSupabaseKey =
-  process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || '';
-
-let supabaseInstance: SupabaseClient | null = null;
-let isSupabaseConfigured = false;
-
-// Only initialize Supabase if a syntactically valid HTTP/HTTPS URL and non-trivial key are provided
-if (isValidHttpUrl(rawSupabaseUrl) && rawSupabaseKey.trim().length > 10) {
-  try {
-    supabaseInstance = createClient(rawSupabaseUrl.trim(), rawSupabaseKey.trim());
-    isSupabaseConfigured = true;
-    console.log('✅ Supabase PostgreSQL Client initialized successfully.');
-  } catch {
-    console.log('ℹ️ Supabase client initialization deferred; using persistent local disk fallback.');
-    supabaseInstance = null;
-    isSupabaseConfigured = false;
-  }
-} else {
-  console.log('ℹ️ Supabase credentials not configured with valid HTTP/S endpoint; using persistent local disk fallback (saved_reports/data/).');
-}
-
-export const supabase = supabaseInstance;
-export const isDatabaseConnected = () => isSupabaseConfigured;
-
-// Local persistent JSON storage directory fallback
-const LOCAL_DATA_DIR = path.join(process.cwd(), 'saved_reports', 'data');
-if (!fs.existsSync(LOCAL_DATA_DIR)) {
-  fs.mkdirSync(LOCAL_DATA_DIR, { recursive: true });
-}
-
-function getLocalFilePath(filename: string): string {
-  return path.join(LOCAL_DATA_DIR, filename);
-}
-
-function readLocalJson<T>(filename: string, defaultData: T): T {
-  const filePath = getLocalFilePath(filename);
-  try {
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify(defaultData, null, 2), 'utf-8');
-      return defaultData;
-    }
-    const raw = fs.readFileSync(filePath, 'utf-8');
-    return JSON.parse(raw) as T;
-  } catch (e) {
-    console.warn(`Error reading local JSON (${filename}), using default fallback:`, e);
-    return defaultData;
-  }
-}
-
-function writeLocalJson<T>(filename: string, data: T): void {
-  const filePath = getLocalFilePath(filename);
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
-  } catch (e) {
-    console.error(`Error writing local JSON (${filename}):`, e);
   }
 }
 
 // -------------------------------------------------------------
-// 1. Document Archives (Disk File Pointers & Audit History)
+// 1. Document Archives
 // -------------------------------------------------------------
 export interface DocumentArchiveRecord {
   id?: string;
@@ -112,328 +69,296 @@ export interface DocumentArchiveRecord {
 export async function insertDocumentArchive(
   record: DocumentArchiveRecord
 ): Promise<DocumentArchiveRecord> {
-  const enrichedRecord: DocumentArchiveRecord = {
-    ...record,
-    id: record.id || `DOC-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
-    logged_at: record.logged_at || new Date().toISOString(),
-  };
+  const pool = await getPool();
+  const id = record.id || `DOC-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+  const loggedAt = record.logged_at || new Date().toISOString();
 
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const { data, error } = await supabaseInstance
-        .from('document_archives')
-        .insert([enrichedRecord])
-        .select();
+  await pool.request()
+    .input('id', sql.NVarChar(64), id)
+    .input('record_id', sql.NVarChar(64), record.record_id)
+    .input('module_type', sql.NVarChar(32), record.module_type)
+    .input('reference_number', sql.NVarChar(64), record.reference_number || null)
+    .input('server_path', sql.NVarChar(512), record.server_path)
+    .input('file_name', sql.NVarChar(256), record.file_name)
+    .input('full_path', sql.NVarChar(512), record.full_path)
+    .input('file_size_bytes', sql.BigInt, record.file_size_bytes)
+    .input('file_size_formatted', sql.NVarChar(32), record.file_size_formatted)
+    .input('operator_name', sql.NVarChar(128), record.operator_name)
+    .input('metadata', sql.NVarChar(sql.MAX), record.metadata ? JSON.stringify(record.metadata) : null)
+    .input('logged_at', sql.DateTime2, loggedAt)
+    .query(`
+      INSERT INTO DocumentArchives (
+        id, record_id, module_type, reference_number, server_path,
+        file_name, full_path, file_size_bytes, file_size_formatted,
+        operator_name, metadata, logged_at
+      ) VALUES (
+        @id, @record_id, @module_type, @reference_number, @server_path,
+        @file_name, @full_path, @file_size_bytes, @file_size_formatted,
+        @operator_name, @metadata, @logged_at
+      )
+    `);
 
-      if (!error && data && data.length > 0) {
-        return data[0] as DocumentArchiveRecord;
-      }
-      console.warn('Supabase insert warning, falling back to local file log:', error?.message);
-    } catch (err) {
-      console.warn('Supabase connection error while inserting archive, falling back to local:', err);
-    }
-  }
-
-  // Fallback: Local disk JSON
-  const currentLogs = readLocalJson<DocumentArchiveRecord[]>('document_archives.json', []);
-  currentLogs.unshift(enrichedRecord);
-  writeLocalJson('document_archives.json', currentLogs.slice(0, 300));
-  return enrichedRecord;
+  return { ...record, id, logged_at: loggedAt };
 }
 
-export async function getDocumentArchives(
-  moduleType?: string
-): Promise<DocumentArchiveRecord[]> {
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      let query = supabaseInstance
-        .from('document_archives')
-        .select('*')
-        .order('logged_at', { ascending: false });
+export async function getDocumentArchives(moduleType?: string): Promise<DocumentArchiveRecord[]> {
+  const pool = await getPool();
+  const req = pool.request();
+  let query = `
+    SELECT 
+      id, record_id, module_type, reference_number, server_path,
+      file_name, full_path, file_size_bytes, file_size_formatted,
+      operator_name, metadata, logged_at
+    FROM DocumentArchives
+  `;
 
-      if (moduleType) {
-        query = query.eq('module_type', moduleType);
-      }
-
-      const { data, error } = await query;
-      if (!error && data) {
-        return data as DocumentArchiveRecord[];
-      }
-      console.warn('Supabase fetch error, fallback to local archive:', error?.message);
-    } catch (err) {
-      console.warn('Supabase query error, using local fallback:', err);
-    }
-  }
-
-  const logs = readLocalJson<DocumentArchiveRecord[]>('document_archives.json', []);
   if (moduleType) {
-    return logs.filter((l) => l.module_type === moduleType);
+    req.input('moduleType', sql.NVarChar(32), moduleType);
+    query += ` WHERE module_type = @moduleType`;
   }
-  return logs;
+  query += ` ORDER BY logged_at DESC`;
+
+  const result = await req.query(query);
+  return result.recordset.map((row) => ({
+    ...row,
+    metadata: row.metadata ? JSON.parse(row.metadata) : null,
+  }));
 }
 
 // -------------------------------------------------------------
 // 2. Asset Calibration Registry
 // -------------------------------------------------------------
 export async function getAssets(): Promise<AssetRecord[]> {
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const { data, error } = await supabaseInstance
-        .from('asset_registry')
-        .select('*')
-        .order('next_due_date', { ascending: true });
-
-      if (!error && data && data.length > 0) {
-        return data.map((d: any) => ({
-          id: d.id,
-          assetId: d.asset_id,
-          equipmentDescription: d.equipment_description,
-          departmentLocation: d.department_location,
-          intervalDays: Number(d.interval_days),
-          lastCompleted: d.last_completed,
-          nextDueDate: d.next_due_date,
-          status: d.status,
-          assignedOwner: d.assigned_owner,
-          alertEmail: d.alert_email,
-          serialNumber: d.serial_number,
-        }));
-      }
-      // If table is empty on first load, seed with INITIAL_ASSETS
-      if (!error && data && data.length === 0) {
-        await saveAllAssets(INITIAL_ASSETS);
-        return INITIAL_ASSETS;
-      }
-    } catch (err) {
-      console.warn('Error fetching assets from Supabase, using local fallback:', err);
-    }
-  }
-
-  return readLocalJson<AssetRecord[]>('assets.json', INITIAL_ASSETS);
-}
-
-export async function saveAllAssets(assets: AssetRecord[]): Promise<void> {
-  // Always persist to local disk for offline resilience
-  writeLocalJson('assets.json', assets);
-
-  if (isSupabaseConfigured && supabaseInstance) {
-    const payload = assets.map((a) => ({
-      id: a.id,
-      asset_id: a.assetId,
-      equipment_description: a.equipmentDescription,
-      department_location: a.departmentLocation,
-      interval_days: a.intervalDays,
-      // Convert empty strings to null so Postgres doesn't crash
-      last_completed: a.lastCompleted || null, 
-      next_due_date: a.nextDueDate || null,
-      status: a.status,
-      assigned_owner: a.assignedOwner,
-      alert_email: a.alertEmail,
-      serial_number: a.serialNumber,
-      updated_at: new Date().toISOString(),
-    }));
-
-    // Extract the error object directly from the Supabase response
-    const { error } = await supabaseInstance
-      .from('asset_registry')
-      .upsert(payload, { onConflict: 'id' });
-
-    // Log the exact Postgres rejection reason if it fails
-    if (error) {
-      console.error('❌ Supabase Postgres Error (saveAllAssets):', error.message, error.details);
-    } else {
-      console.log('✅ Supabase sync successful.');
-    }
-  }
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT 
+      id,
+      asset_id AS assetId,
+      equipment_description AS equipmentDescription,
+      department_location AS departmentLocation,
+      interval_days AS intervalDays,
+      CONVERT(NVARCHAR(10), last_completed, 120) AS lastCompleted,
+      CONVERT(NVARCHAR(10), next_due_date, 120) AS nextDueDate,
+      status,
+      assigned_owner AS assignedOwner,
+      alert_email AS alertEmail,
+      serial_number AS serialNumber
+    FROM AssetRegistry
+    ORDER BY next_due_date ASC
+  `);
+  return result.recordset;
 }
 
 export async function updateSingleAsset(asset: AssetRecord): Promise<AssetRecord> {
-  // 1. Save directly to Supabase first for efficiency (no need to fetch the whole table)
-  if (isSupabaseConfigured && supabaseInstance) {
-    const payload = {
-      id: asset.id,
-      asset_id: asset.assetId,
-      equipment_description: asset.equipmentDescription,
-      department_location: asset.departmentLocation,
-      interval_days: asset.intervalDays,
-      last_completed: asset.lastCompleted || null,
-      next_due_date: asset.nextDueDate || null,
-      status: asset.status,
-      assigned_owner: asset.assignedOwner,
-      alert_email: asset.alertEmail,
-      serial_number: asset.serialNumber,
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabaseInstance
-      .from('asset_registry')
-      .upsert([payload], { onConflict: 'id' });
-
-    if (error) {
-      console.error('❌ Supabase Postgres Error (updateSingleAsset):', error.message, error.details);
-    }
-  }
-
-  // 2. Keep the local JSON file synced in the background
-  const currentAssets = readLocalJson<AssetRecord[]>('assets.json', []);
-  const index = currentAssets.findIndex((a) => a.id === asset.id);
-  
-  if (index >= 0) {
-    currentAssets[index] = asset;
-  } else {
-    currentAssets.unshift(asset);
-  }
-  
-  writeLocalJson('assets.json', currentAssets);
-  
+  const pool = await getPool();
+  await pool.request()
+    .input('id', sql.NVarChar(64), asset.id)
+    .input('asset_id', sql.NVarChar(64), asset.assetId)
+    .input('equipment_description', sql.NVarChar(256), asset.equipmentDescription)
+    .input('department_location', sql.NVarChar(128), asset.departmentLocation || null)
+    .input('interval_days', sql.Int, asset.intervalDays)
+    .input('last_completed', sql.Date, asset.lastCompleted || null)
+    .input('next_due_date', sql.Date, asset.nextDueDate || null)
+    .input('status', sql.NVarChar(64), asset.status)
+    .input('assigned_owner', sql.NVarChar(128), asset.assignedOwner || null)
+    .input('alert_email', sql.NVarChar(256), asset.alertEmail || null)
+    .input('serial_number', sql.NVarChar(128), asset.serialNumber || null)
+    .query(`
+      MERGE AssetRegistry AS target
+      USING (SELECT @id AS id) AS src
+      ON (target.id = src.id)
+      WHEN MATCHED THEN
+        UPDATE SET 
+          asset_id = @asset_id,
+          equipment_description = @equipment_description,
+          department_location = @department_location,
+          interval_days = @interval_days,
+          last_completed = @last_completed,
+          next_due_date = @next_due_date,
+          status = @status,
+          assigned_owner = @assigned_owner,
+          alert_email = @alert_email,
+          serial_number = @serial_number,
+          updated_at = SYSUTCDATETIME()
+      WHEN NOT MATCHED THEN
+        INSERT (
+          id, asset_id, equipment_description, department_location,
+          interval_days, last_completed, next_due_date, status,
+          assigned_owner, alert_email, serial_number
+        ) VALUES (
+          @id, @asset_id, @equipment_description, @department_location,
+          @interval_days, @last_completed, @next_due_date, @status,
+          @assigned_owner, @alert_email, @serial_number
+        );
+    `);
   return asset;
 }
+
+export async function saveAllAssets(assets: AssetRecord[]): Promise<void> {
+  for (const asset of assets) {
+    await updateSingleAsset(asset);
+  }
+}
+
 // -------------------------------------------------------------
 // 3. Non-Conformance Reports (NCRs)
 // -------------------------------------------------------------
 export async function getNcrs(): Promise<NCRRecord[]> {
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const { data, error } = await supabaseInstance
-        .from('ncrs')
-        .select('*')
-        .order('last_edited_at', { ascending: false });
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT 
+      id,
+      ncr_number AS ncrNumber,
+      serial_number AS serialNumber,
+      assembly_part_number AS assemblyPartNumber,
+      assembly_revision AS assemblyRevision,
+      defect_description AS defectDescription,
+      standard_clause AS standardClause,
+      severity,
+      CONVERT(NVARCHAR(10), containment_date, 120) AS containmentDate,
+      root_cause_method AS rootCauseMethod,
+      status,
+      next_action AS nextAction,
+      owner,
+      created_at AS createdAt,
+      last_edited_at AS lastEditedAt,
+      last_edited_by AS lastEditedBy,
+      root_cause_analysis AS rootCauseAnalysis,
+      corrective_action_plan AS correctiveActionPlan,
+      saved_pdf_path AS savedPdfPath,
+      edit_history AS editHistory
+    FROM NCRs
+    ORDER BY last_edited_at DESC
+  `);
 
-      if (!error && data && data.length > 0) {
-        return data.map((d: any) => ({
-          id: d.id,
-          ncrNumber: d.ncr_number,
-          serialNumber: d.serial_number,
-          assemblyPartNumber: d.assembly_part_number,
-          assemblyRevision: d.assembly_revision,
-          defectDescription: d.defect_description,
-          standardClause: d.standard_clause,
-          severity: d.severity,
-          containmentDate: d.containment_date,
-          rootCauseMethod: d.root_cause_method,
-          status: d.status,
-          nextAction: d.next_action,
-          owner: d.owner,
-          createdAt: d.created_at,
-          lastEditedAt: d.last_edited_at,
-          lastEditedBy: d.last_edited_by,
-          rootCauseAnalysis: d.root_cause_analysis,
-          correctiveActionPlan: d.corrective_action_plan,
-          savedPdfPath: d.saved_pdf_path,
-          editHistory: d.edit_history || [],
-        }));
-      }
-      if (!error && data && data.length === 0) {
-        await saveAllNcrs(INITIAL_NCRS);
-        return INITIAL_NCRS;
-      }
-    } catch (err) {
-      console.warn('Error fetching NCRs from Supabase:', err);
-    }
-  }
-
-  return readLocalJson<NCRRecord[]>('ncrs.json', INITIAL_NCRS);
-}
-
-export async function saveAllNcrs(ncrs: NCRRecord[]): Promise<void> {
-  writeLocalJson('ncrs.json', ncrs);
-
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const payload = ncrs.map((n) => ({
-        id: n.id,
-        ncr_number: n.ncrNumber,
-        serial_number: n.serialNumber,
-        assembly_part_number: n.assemblyPartNumber,
-        assembly_revision: n.assemblyRevision,
-        defect_description: n.defectDescription,
-        standard_clause: n.standardClause,
-        severity: n.severity,
-        containment_date: n.containmentDate,
-        root_cause_method: n.rootCauseMethod,
-        status: n.status,
-        next_action: n.nextAction,
-        owner: n.owner,
-        created_at: n.createdAt,
-        last_edited_at: n.lastEditedAt,
-        last_edited_by: n.lastEditedBy,
-        root_cause_analysis: n.rootCauseAnalysis,
-        corrective_action_plan: n.correctiveActionPlan,
-        saved_pdf_path: n.savedPdfPath,
-        edit_history: n.editHistory || [],
-        updated_at: new Date().toISOString(),
-      }));
-
-      await supabaseInstance.from('ncrs').upsert(payload, { onConflict: 'id' });
-    } catch (err) {
-      console.warn('Failed to upsert NCRs to Supabase:', err);
-    }
-  }
+  return result.recordset.map((row) => ({
+    ...row,
+    editHistory: row.editHistory ? JSON.parse(row.editHistory) : [],
+  }));
 }
 
 export async function updateSingleNcr(ncr: NCRRecord): Promise<NCRRecord> {
-  const current = await getNcrs();
-  const exists = current.some((n) => n.id === ncr.id);
-  const updated = exists ? current.map((n) => (n.id === ncr.id ? ncr : n)) : [ncr, ...current];
-  await saveAllNcrs(updated);
+  const pool = await getPool();
+  await pool.request()
+    .input('id', sql.NVarChar(64), ncr.id)
+    .input('ncr_number', sql.NVarChar(64), ncr.ncrNumber)
+    .input('serial_number', sql.NVarChar(128), ncr.serialNumber || null)
+    .input('assembly_part_number', sql.NVarChar(128), ncr.assemblyPartNumber || null)
+    .input('assembly_revision', sql.NVarChar(32), ncr.assemblyRevision || null)
+    .input('defect_description', sql.NVarChar(sql.MAX), ncr.defectDescription || null)
+    .input('standard_clause', sql.NVarChar(64), ncr.standardClause || null)
+    .input('severity', sql.NVarChar(32), ncr.severity || null)
+    .input('containment_date', sql.Date, ncr.containmentDate || null)
+    .input('root_cause_method', sql.NVarChar(64), ncr.rootCauseMethod || null)
+    .input('status', sql.NVarChar(64), ncr.status)
+    .input('next_action', sql.NVarChar(sql.MAX), ncr.nextAction || null)
+    .input('owner', sql.NVarChar(128), ncr.owner || null)
+    .input('last_edited_by', sql.NVarChar(128), ncr.lastEditedBy || null)
+    .input('root_cause_analysis', sql.NVarChar(sql.MAX), ncr.rootCauseAnalysis || null)
+    .input('corrective_action_plan', sql.NVarChar(sql.MAX), ncr.correctiveActionPlan || null)
+    .input('saved_pdf_path', sql.NVarChar(512), ncr.savedPdfPath || null)
+    .input('edit_history', sql.NVarChar(sql.MAX), JSON.stringify(ncr.editHistory || []))
+    .query(`
+      MERGE NCRs AS target
+      USING (SELECT @id AS id) AS src
+      ON (target.id = src.id)
+      WHEN MATCHED THEN
+        UPDATE SET 
+          ncr_number = @ncr_number,
+          serial_number = @serial_number,
+          assembly_part_number = @assembly_part_number,
+          assembly_revision = @assembly_revision,
+          defect_description = @defect_description,
+          standard_clause = @standard_clause,
+          severity = @severity,
+          containment_date = @containment_date,
+          root_cause_method = @root_cause_method,
+          status = @status,
+          next_action = @next_action,
+          owner = @owner,
+          last_edited_at = SYSUTCDATETIME(),
+          last_edited_by = @last_edited_by,
+          root_cause_analysis = @root_cause_analysis,
+          corrective_action_plan = @corrective_action_plan,
+          saved_pdf_path = @saved_pdf_path,
+          edit_history = @edit_history
+      WHEN NOT MATCHED THEN
+        INSERT (
+          id, ncr_number, serial_number, assembly_part_number,
+          assembly_revision, defect_description, standard_clause,
+          severity, containment_date, root_cause_method, status,
+          next_action, owner, created_at, last_edited_at,
+          last_edited_by, root_cause_analysis, corrective_action_plan,
+          saved_pdf_path, edit_history
+        ) VALUES (
+          @id, @ncr_number, @serial_number, @assembly_part_number,
+          @assembly_revision, @defect_description, @standard_clause,
+          @severity, @containment_date, @root_cause_method, @status,
+          @next_action, @owner, SYSUTCDATETIME(), SYSUTCDATETIME(),
+          @last_edited_by, @root_cause_analysis, @corrective_action_plan,
+          @saved_pdf_path, @edit_history
+        );
+    `);
   return ncr;
+}
+
+export async function saveAllNcrs(ncrs: NCRRecord[]): Promise<void> {
+  for (const ncr of ncrs) {
+    await updateSingleNcr(ncr);
+  }
 }
 
 // -------------------------------------------------------------
 // 4. Compliance Audits
 // -------------------------------------------------------------
 export async function getAudits(): Promise<ComplianceAudit[]> {
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const { data, error } = await supabaseInstance
-        .from('compliance_audits')
-        .select('*')
-        .order('next_due_date', { ascending: true });
-
-      if (!error && data && data.length > 0) {
-        return data.map((d: any) => ({
-          id: d.id,
-          title: d.title,
-          standard: d.standard,
-          cadence: d.cadence,
-          lastCompleted: d.last_completed,
-          nextDueDate: d.next_due_date,
-          status: d.status,
-          leadAuditor: d.lead_auditor,
-        }));
-      }
-      if (!error && data && data.length === 0) {
-        await saveAllAudits(INITIAL_AUDITS);
-        return INITIAL_AUDITS;
-      }
-    } catch (err) {
-      console.warn('Error fetching audits from Supabase:', err);
-    }
-  }
-
-  return readLocalJson<ComplianceAudit[]>('audits.json', INITIAL_AUDITS);
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT 
+      id,
+      title,
+      standard,
+      cadence,
+      CONVERT(NVARCHAR(10), last_completed, 120) AS lastCompleted,
+      CONVERT(NVARCHAR(10), next_due_date, 120) AS nextDueDate,
+      status,
+      lead_auditor AS leadAuditor
+    FROM ComplianceAudits
+    ORDER BY next_due_date ASC
+  `);
+  return result.recordset;
 }
 
 export async function saveAllAudits(audits: ComplianceAudit[]): Promise<void> {
-  writeLocalJson('audits.json', audits);
-
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const payload = audits.map((a) => ({
-        id: a.id,
-        title: a.title,
-        standard: a.standard,
-        cadence: a.cadence,
-        last_completed: a.lastCompleted,
-        next_due_date: a.nextDueDate,
-        status: a.status,
-        lead_auditor: a.leadAuditor,
-        updated_at: new Date().toISOString(),
-      }));
-
-      await supabaseInstance.from('compliance_audits').upsert(payload, { onConflict: 'id' });
-    } catch (err) {
-      console.warn('Failed to upsert audits to Supabase:', err);
-    }
+  const pool = await getPool();
+  for (const a of audits) {
+    await pool.request()
+      .input('id', sql.NVarChar(64), a.id)
+      .input('title', sql.NVarChar(256), a.title)
+      .input('standard', sql.NVarChar(64), a.standard)
+      .input('cadence', sql.NVarChar(64), a.cadence || null)
+      .input('last_completed', sql.Date, a.lastCompleted || null)
+      .input('next_due_date', sql.Date, a.nextDueDate || null)
+      .input('status', sql.NVarChar(64), a.status)
+      .input('lead_auditor', sql.NVarChar(128), a.leadAuditor || null)
+      .query(`
+        MERGE ComplianceAudits AS target
+        USING (SELECT @id AS id) AS src
+        ON (target.id = src.id)
+        WHEN MATCHED THEN
+          UPDATE SET 
+            title = @title,
+            standard = @standard,
+            cadence = @cadence,
+            last_completed = @last_completed,
+            next_due_date = @next_due_date,
+            status = @status,
+            lead_auditor = @lead_auditor,
+            updated_at = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN
+          INSERT (id, title, standard, cadence, last_completed, next_due_date, status, lead_auditor)
+          VALUES (@id, @title, @standard, @cadence, @last_completed, @next_due_date, @status, @lead_auditor);
+      `);
   }
 }
 
@@ -441,64 +366,62 @@ export async function saveAllAudits(audits: ComplianceAudit[]): Promise<void> {
 // 5. Training Records
 // -------------------------------------------------------------
 export async function getTraining(): Promise<TrainingRecord[]> {
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const { data, error } = await supabaseInstance
-        .from('training_records')
-        .select('*')
-        .order('expiration_date', { ascending: true });
-
-      if (!error && data && data.length > 0) {
-        return data.map((d: any) => ({
-          id: d.id,
-          operatorName: d.operator_name,
-          role: d.role,
-          certificationTitle: d.certification_title,
-          standardLevel: d.standard_level,
-          issueDate: d.issue_date,
-          expirationDate: d.expiration_date,
-          status: d.status,
-          contactEmail: d.contact_email,
-          supervisor: d.supervisor,
-          notes: d.notes,
-        }));
-      }
-      if (!error && data && data.length === 0) {
-        await saveAllTraining(INITIAL_TRAINING);
-        return INITIAL_TRAINING;
-      }
-    } catch (err) {
-      console.warn('Error fetching training from Supabase:', err);
-    }
-  }
-
-  return readLocalJson<TrainingRecord[]>('training.json', INITIAL_TRAINING);
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT 
+      id,
+      operator_name AS operatorName,
+      role,
+      certification_title AS certificationTitle,
+      standard_level AS standardLevel,
+      CONVERT(NVARCHAR(10), issue_date, 120) AS issueDate,
+      CONVERT(NVARCHAR(10), expiration_date, 120) AS expirationDate,
+      status,
+      contact_email AS contactEmail,
+      supervisor,
+      notes
+    FROM TrainingRecords
+    ORDER BY expiration_date ASC
+  `);
+  return result.recordset;
 }
 
-export async function saveAllTraining(training: TrainingRecord[]): Promise<void> {
-  writeLocalJson('training.json', training);
-
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const payload = training.map((t) => ({
-        id: t.id,
-        operator_name: t.operatorName,
-        role: t.role,
-        certification_title: t.certificationTitle,
-        standard_level: t.standardLevel,
-        issue_date: t.issueDate,
-        expiration_date: t.expirationDate,
-        status: t.status,
-        contact_email: t.contactEmail,
-        supervisor: t.supervisor,
-        notes: t.notes,
-        updated_at: new Date().toISOString(),
-      }));
-
-      await supabaseInstance.from('training_records').upsert(payload, { onConflict: 'id' });
-    } catch (err) {
-      console.warn('Failed to upsert training to Supabase:', err);
-    }
+export async function saveAllTraining(records: TrainingRecord[]): Promise<void> {
+  const pool = await getPool();
+  for (const t of records) {
+    await pool.request()
+      .input('id', sql.NVarChar(64), t.id)
+      .input('operator_name', sql.NVarChar(128), t.operatorName)
+      .input('role', sql.NVarChar(128), t.role || null)
+      .input('certification_title', sql.NVarChar(256), t.certificationTitle)
+      .input('standard_level', sql.NVarChar(64), t.standardLevel || null)
+      .input('issue_date', sql.Date, t.issueDate || null)
+      .input('expiration_date', sql.Date, t.expirationDate || null)
+      .input('status', sql.NVarChar(64), t.status)
+      .input('contact_email', sql.NVarChar(256), t.contactEmail || null)
+      .input('supervisor', sql.NVarChar(128), t.supervisor || null)
+      .input('notes', sql.NVarChar(sql.MAX), t.notes || null)
+      .query(`
+        MERGE TrainingRecords AS target
+        USING (SELECT @id AS id) AS src
+        ON (target.id = src.id)
+        WHEN MATCHED THEN
+          UPDATE SET 
+            operator_name = @operator_name,
+            role = @role,
+            certification_title = @certification_title,
+            standard_level = @standard_level,
+            issue_date = @issue_date,
+            expiration_date = @expiration_date,
+            status = @status,
+            contact_email = @contact_email,
+            supervisor = @supervisor,
+            notes = @notes,
+            updated_at = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN
+          INSERT (id, operator_name, role, certification_title, standard_level, issue_date, expiration_date, status, contact_email, supervisor, notes)
+          VALUES (@id, @operator_name, @role, @certification_title, @standard_level, @issue_date, @expiration_date, @status, @contact_email, @supervisor, @notes);
+      `);
   }
 }
 
@@ -506,81 +429,103 @@ export async function saveAllTraining(training: TrainingRecord[]): Promise<void>
 // 6. Engineering Pipeline Jobs (FAI)
 // -------------------------------------------------------------
 export async function getJobs(): Promise<EngineeringJob[]> {
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const { data, error } = await supabaseInstance
-        .from('engineering_jobs')
-        .select('*')
-        .order('target_build_date', { ascending: true });
+  const pool = await getPool();
+  const result = await pool.request().query(`
+    SELECT 
+      id,
+      job_id AS jobId,
+      CONVERT(NVARCHAR(10), due_date, 120) AS dueDate,
+      project_code AS projectCode,
+      customer,
+      quantity,
+      assembly_name AS assemblyName,
+      part_number AS partNumber,
+      revision,
+      CONVERT(NVARCHAR(10), target_build_date, 120) AS targetBuildDate,
+      start_time AS startTime,
+      total_build_time_hours AS totalBuildTimeHours,
+      status,
+      checks,
+      passed_test AS passedTest,
+      CONVERT(NVARCHAR(10), passed_test_date, 120) AS passedTestDate,
+      passed_qa AS passedQa,
+      CONVERT(NVARCHAR(10), passed_qa_date, 120) AS passedQaDate,
+      smt_line AS smtLine,
+      notes
+    FROM EngineeringJobs
+    ORDER BY target_build_date ASC
+  `);
 
-      if (!error && data && data.length > 0) {
-        return data.map((d: any) => ({
-          id: d.id,
-          jobId: d.job_id,
-          dueDate: d.due_date,
-          projectCode: d.project_code,
-          customer: d.customer,
-          quantity: d.quantity,
-          assemblyName: d.assembly_name,
-          partNumber: d.part_number,
-          revision: d.revision,
-          targetBuildDate: d.target_build_date,
-          startTime: d.start_time,
-          totalBuildTimeHours: d.total_build_time_hours,
-          status: d.status,
-          checks: d.checks || {},
-          passedTest: d.passed_test,
-          passedTestDate: d.passed_test_date,
-          passedQa: d.passed_qa,
-          passedQaDate: d.passed_qa_date,
-          smtLine: d.smt_line,
-          notes: d.notes,
-        }));
-      }
-      if (!error && data && data.length === 0) {
-        await saveAllJobs(INITIAL_JOBS);
-        return INITIAL_JOBS;
-      }
-    } catch (err) {
-      console.warn('Error fetching jobs from Supabase:', err);
-    }
-  }
-
-  return readLocalJson<EngineeringJob[]>('jobs.json', INITIAL_JOBS);
+  return result.recordset.map((row) => ({
+    ...row,
+    checks: row.checks ? JSON.parse(row.checks) : {},
+  }));
 }
 
 export async function saveAllJobs(jobs: EngineeringJob[]): Promise<void> {
-  writeLocalJson('jobs.json', jobs);
-
-  if (isSupabaseConfigured && supabaseInstance) {
-    try {
-      const payload = jobs.map((j) => ({
-        id: j.id,
-        job_id: j.jobId,
-        due_date: j.dueDate,
-        project_code: j.projectCode,
-        customer: j.customer,
-        quantity: j.quantity,
-        assembly_name: j.assemblyName,
-        part_number: j.partNumber,
-        revision: j.revision,
-        target_build_date: j.targetBuildDate,
-        start_time: j.startTime,
-        total_build_time_hours: j.totalBuildTimeHours,
-        status: j.status,
-        checks: j.checks || {},
-        passed_test: j.passedTest,
-        passed_test_date: j.passedTestDate,
-        passed_qa: j.passedQa,
-        passed_qa_date: j.passedQaDate,
-        smt_line: j.smtLine,
-        notes: j.notes,
-        updated_at: new Date().toISOString(),
-      }));
-
-      await supabaseInstance.from('engineering_jobs').upsert(payload, { onConflict: 'id' });
-    } catch (err) {
-      console.warn('Failed to upsert jobs to Supabase:', err);
-    }
+  const pool = await getPool();
+  for (const j of jobs) {
+    await pool.request()
+      .input('id', sql.NVarChar(64), j.id)
+      .input('job_id', sql.NVarChar(64), j.jobId)
+      .input('due_date', sql.Date, j.dueDate || null)
+      .input('project_code', sql.NVarChar(64), j.projectCode || null)
+      .input('customer', sql.NVarChar(128), j.customer || null)
+      .input('quantity', sql.Int, j.quantity || null)
+      .input('assembly_name', sql.NVarChar(256), j.assemblyName || null)
+      .input('part_number', sql.NVarChar(128), j.partNumber || null)
+      .input('revision', sql.NVarChar(32), j.revision || null)
+      .input('target_build_date', sql.Date, j.targetBuildDate || null)
+      .input('start_time', sql.NVarChar(32), j.startTime || null)
+      .input('total_build_time_hours', sql.Float, j.totalBuildTimeHours || null)
+      .input('status', sql.NVarChar(64), j.status)
+      .input('checks', sql.NVarChar(sql.MAX), JSON.stringify(j.checks || {}))
+      .input('passed_test', sql.Bit, j.passedTest ? 1 : 0)
+      .input('passed_test_date', sql.Date, j.passedTestDate || null)
+      .input('passed_qa', sql.Bit, j.passedQa ? 1 : 0)
+      .input('passed_qa_date', sql.Date, j.passedQaDate || null)
+      .input('smt_line', sql.NVarChar(64), j.smtLine || null)
+      .input('notes', sql.NVarChar(sql.MAX), j.notes || null)
+      .query(`
+        MERGE EngineeringJobs AS target
+        USING (SELECT @id AS id) AS src
+        ON (target.id = src.id)
+        WHEN MATCHED THEN
+          UPDATE SET 
+            job_id = @job_id,
+            due_date = @due_date,
+            project_code = @project_code,
+            customer = @customer,
+            quantity = @quantity,
+            assembly_name = @assembly_name,
+            part_number = @part_number,
+            revision = @revision,
+            target_build_date = @target_build_date,
+            start_time = @start_time,
+            total_build_time_hours = @total_build_time_hours,
+            status = @status,
+            checks = @checks,
+            passed_test = @passed_test,
+            passed_test_date = @passed_test_date,
+            passed_qa = @passed_qa,
+            passed_qa_date = @passed_qa_date,
+            smt_line = @smt_line,
+            notes = @notes,
+            updated_at = SYSUTCDATETIME()
+        WHEN NOT MATCHED THEN
+          INSERT (
+            id, job_id, due_date, project_code, customer, quantity,
+            assembly_name, part_number, revision, target_build_date,
+            start_time, total_build_time_hours, status, checks,
+            passed_test, passed_test_date, passed_qa, passed_qa_date,
+            smt_line, notes
+          ) VALUES (
+            @id, @job_id, @due_date, @project_code, @customer, @quantity,
+            @assembly_name, @part_number, @revision, @target_build_date,
+            @start_time, @total_build_time_hours, @status, @checks,
+            @passed_test, @passed_test_date, @passed_qa, @passed_qa_date,
+            @smt_line, @notes
+          );
+      `);
   }
 }
