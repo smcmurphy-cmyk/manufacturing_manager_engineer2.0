@@ -141,9 +141,9 @@ export interface EngineeringJob {
     aoiBotTop: boolean;
     aoiFinalBotTop: boolean;
   };
-  passedTest?: 'Yes' | 'No';
+  passedTest?: boolean;
   passedTestDate?: string;
-  passedQa?: 'Yes' | 'No';
+  passedQa?: boolean;
   passedQaDate?: string;
   smtLine?: string;
   notes?: string;
