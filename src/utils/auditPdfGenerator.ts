@@ -3,7 +3,6 @@ import { ComplianceAudit } from '../types';
 
 export interface AuditPdfOptions {
   audit: ComplianceAudit;
-  serverPath?: string;
   fileName?: string;
   leadAuditor?: string;
   scope?: string;
@@ -16,7 +15,6 @@ export interface AuditPdfOptions {
 export function generateAuditPdf(options: AuditPdfOptions): jsPDF {
   const {
     audit,
-    serverPath,
     fileName,
     leadAuditor = audit.leadAuditor || 'Lead QMS Auditor',
     scope = audit.scope || 'Quality Management System & Process Workmanship Verification',
@@ -174,8 +172,8 @@ export function generateAuditPdf(options: AuditPdfOptions): jsPDF {
 
   y += 2;
 
-  // Section 4: Server Storage & Host File Destination
-  if (serverPath || fileName) {
+  // Section 4: System Reference Path
+  if (fileName) {
     doc.setFillColor(239, 246, 255); // sky-50
     doc.roundedRect(margin, y, contentWidth, 12, 1.5, 1.5, 'F');
     doc.setDrawColor(186, 230, 253);
@@ -184,12 +182,12 @@ export function generateAuditPdf(options: AuditPdfOptions): jsPDF {
     doc.setTextColor(3, 105, 161);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
-    doc.text('HOST SERVER ARCHIVE DESTINATION:', margin + 3, y + 4.5);
+    doc.text('SYSTEM REFERENCE PATH:', margin + 3, y + 4.5);
 
     doc.setFont('courier', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
-    const fullPathStr = `${serverPath || 'C:\\Users\\smcmu\\OneDrive\\Desktop\\Reports\\Audits'}\\${fileName || `AUDIT_${audit.id}.pdf`}`;
+    const fullPathStr = `/uploads/${fileName}`;
     doc.text(fullPathStr, margin + 3, y + 9);
 
     y += 16;
