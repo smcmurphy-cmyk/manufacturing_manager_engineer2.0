@@ -8,10 +8,10 @@ import {
 } from './src/types';
 
 const config: sql.config = {
-  user: process.env.DB_USER || 'sa',
-  password: process.env.DB_PASSWORD || '',
-  server: process.env.DB_SERVER || 'localhost',
-  database: process.env.DB_NAME || 'DynamicEngineeringQMS',
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  server: process.env.DB_SERVER as string, // Cast as string for TypeScript
+  database: process.env.DB_NAME,
   port: parseInt(process.env.DB_PORT || '1433', 10),
   options: {
     encrypt: process.env.DB_ENCRYPT === 'true',
@@ -25,7 +25,6 @@ const config: sql.config = {
 };
 
 let pool: sql.ConnectionPool | null = null;
-
 export async function getPool(): Promise<sql.ConnectionPool> {
   if (!pool) {
     pool = await new sql.ConnectionPool(config).connect();

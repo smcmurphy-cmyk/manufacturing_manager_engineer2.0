@@ -125,7 +125,7 @@ export const FaiEditModal: React.FC<FaiEditModalProps> = ({
           
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label className="block font-medium text-slate-700 mb-1">FAI Number / Job ID</label>
+              <label className="block font-medium text-slate-700 mb-1">LOT #</label>
               <input
                 type="text"
                 value={formData.jobId}

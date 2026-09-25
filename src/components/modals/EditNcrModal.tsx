@@ -24,7 +24,6 @@ export const EditNcrModal: React.FC<EditNcrModalProps> = ({ isOpen, ncr, onClose
   const [formData, setFormData] = useState<NCRRecord | null>(null);
   const [editorName, setEditorName] = useState<string>('Lead Quality Engineer');
   const [changeNote, setChangeNote] = useState<string>('');
-  const [serverPath, setServerPath] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [savedDetails, setSavedDetails] = useState<{ savedPath: string; fileName: string; fileSize: string; timestamp: string; } | null>(null);
@@ -49,13 +48,7 @@ export const EditNcrModal: React.FC<EditNcrModalProps> = ({ isOpen, ncr, onClose
     const safePart = (ncr.assemblyPartNumber || 'PART').replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
     setFileName(`${safeNcrNum}_${safePart}_${todayStr}.pdf`);
 
-    // Strictly fetch from the new backend, ignoring local storage cache
-    fetch('/api/ncrs/server-info')
-      .then((res) => res.json())
-      .then((info) => {
-        if (info.defaultStorageDir) setServerPath(info.defaultStorageDir);
-      })
-      .catch((err) => console.error('Failed to fetch server paths:', err));
+
   }, [isOpen, ncr]);
 
   if (!isOpen || !formData || !ncr) return null;
@@ -72,16 +65,16 @@ export const EditNcrModal: React.FC<EditNcrModalProps> = ({ isOpen, ncr, onClose
       newStatus: formData.status,
     };
 
-    return {
-      updatedNcr: {
-        ...formData,
-        lastEditedAt: editTimestamp,
-        lastEditedBy: editorName.trim() || 'Quality Staff',
-        editHistory: [newEditEntry, ...(formData.editHistory || [])],
-        savedPdfPath: `${serverPath.trim()}\\${fileName.trim()}`,
-      },
-      editTimestamp,
-    };
+  return {
+  updatedNcr: {
+    ...formData,
+    lastEditedAt: editTimestamp,
+    lastEditedBy: editorName.trim() || 'Quality Staff',
+    editHistory: [newEditEntry, ...(formData.editHistory || [])],
+    savedPdfPath: formData.savedPdfPath || '', // Leave blank; the server will provide the path
+  },
+  editTimestamp,
+};
   };
 
   const handleSaveOnly = () => {
@@ -98,52 +91,61 @@ export const EditNcrModal: React.FC<EditNcrModalProps> = ({ isOpen, ncr, onClose
     }
   };
 
-  const handleSaveAndArchivePdf = async () => {
-    setIsSaving(true);
-    setErrorMessage(null);
-    try {
-      const { updatedNcr, editTimestamp } = constructUpdatedNcr();
-      
-      const pdfDoc = generateNcrPdf({
-        ncr: updatedNcr,
-        serverPath: serverPath.trim(),
-        fileName: fileName.trim(),
-        editor: editorName.trim(),
-        rootCauseNotes: updatedNcr.rootCauseAnalysis,
-        correctiveActionNotes: updatedNcr.correctiveActionPlan || updatedNcr.nextAction,
-        timestamp: editTimestamp,
-      });
+ const handleSaveAndArchivePdf = async () => {
+  setIsSaving(true);
+  setErrorMessage(null);
+  try {
+    const { updatedNcr, editTimestamp } = constructUpdatedNcr();
+    
+    const pdfDoc = generateNcrPdf({
+      ncr: updatedNcr,
+      fileName: fileName.trim(),
+      editor: editorName.trim(),
+      rootCauseNotes: updatedNcr.rootCauseAnalysis,
+      correctiveActionNotes: updatedNcr.correctiveActionPlan || updatedNcr.nextAction,
+      timestamp: editTimestamp,
+    });
 
-      const pdfBase64 = pdfDoc.output('datauristring');
+    // 1. Convert jsPDF output to a Blob
+    const pdfBlob = pdfDoc.output('blob');
 
-      const response = await fetch('/api/ncrs/save-pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serverPath: serverPath.trim(),
-          fileName: fileName.trim(),
-          pdfBase64,
-          ncrData: updatedNcr,
-          editor: editorName.trim(),
-        }),
-      });
+    // 2. Package the Blob and metadata into FormData
+    const formData = new FormData();
+    formData.append('file', pdfBlob, fileName.trim());
+    formData.append('ncrData', JSON.stringify(updatedNcr));
 
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || 'Server rejected PDF save');
+    // 3. Send to your new Express/Multer backend
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData, 
+      // Do NOT set Content-Type header here
+    });
 
-      setSavedDetails({ savedPath: result.savedPath, fileName: result.fileName, fileSize: result.fileSize, timestamp: result.timestamp });
-      onSave(updatedNcr);
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Failed to archive NCR PDF to server');
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    const result = await response.json();
+    if (!response.ok || !result.success) throw new Error(result.error || 'Server rejected PDF save');
+
+    // 4. Update the path based on the server's response
+    updatedNcr.savedPdfPath = result.url;
+
+    setSavedDetails({ 
+      savedPath: result.url, 
+      fileName: fileName.trim(), 
+      fileSize: 'File Saved', 
+      timestamp: editTimestamp 
+    });
+    
+    onSave(updatedNcr);
+  } catch (err: any) {
+    setErrorMessage(err.message || 'Failed to archive NCR PDF to server');
+  } finally {
+    setIsSaving(false);
+  }
+};
 
   const handleDownloadLocalPdf = () => {
     const { updatedNcr, editTimestamp } = constructUpdatedNcr();
     const pdfDoc = generateNcrPdf({
-      ncr: updatedNcr, serverPath: serverPath.trim(), fileName: fileName.trim(),
+      ncr: updatedNcr, fileName: fileName.trim(),
       editor: editorName.trim(), rootCauseNotes: updatedNcr.rootCauseAnalysis,
       correctiveActionNotes: updatedNcr.correctiveActionPlan || updatedNcr.nextAction, timestamp: editTimestamp,
     });
@@ -213,7 +215,6 @@ export const EditNcrModal: React.FC<EditNcrModalProps> = ({ isOpen, ncr, onClose
           <div className="space-y-3">
             <h4 className="font-bold uppercase flex items-center gap-2 border-b pb-1"><FolderTree className="w-4 h-4 text-sky-600"/> Storage Destination</h4>
             <div className="grid grid-cols-2 gap-3">
-              <div><label className="block mb-1 font-medium">Server Path</label><input type="text" value={serverPath} onChange={e => setServerPath(e.target.value)} className="w-full p-2 border rounded font-mono" /></div>
               <div><label className="block mb-1 font-medium">File Name</label><input type="text" value={fileName} onChange={e => setFileName(e.target.value)} className="w-full p-2 border rounded font-mono" /></div>
             </div>
           </div>

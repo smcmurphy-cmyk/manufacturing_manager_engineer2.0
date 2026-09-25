@@ -3,7 +3,6 @@ import { EngineeringJob } from '../types';
 
 export interface FaiPdfOptions {
   job: EngineeringJob;
-  serverPath?: string;
   fileName?: string;
   operatorName?: string;
   operatorNotes?: string;
@@ -11,7 +10,13 @@ export interface FaiPdfOptions {
 }
 
 export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
-  const { job, serverPath, fileName, operatorName = 'Manufacturing Engineer', operatorNotes, timestamp = new Date().toLocaleString() } = options;
+  const { 
+    job, 
+    fileName, 
+    operatorName = 'Manufacturing Engineer', 
+    operatorNotes, 
+    timestamp = new Date().toLocaleString() 
+  } = options;
 
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -132,14 +137,14 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
   y += 6;
 
   const gates = [
-    { num: '#1', label: 'XY / ODB++ Gerber Files', status: job.checks.xyOdb ? 'PASSED' : 'FAILED', detail: 'DFM & Stackup Approved' },
-    { num: '#2', label: 'Stencil File (BOT/TOP)', status: job.checks.stencilBotTop ? 'PASSED' : 'FAILED', detail: 'Laser-Cut Step Stencil Verified' },
-    { num: '#3', label: 'SPI File (BOT/TOP)', status: job.checks.spiBotTop ? 'PASSED' : 'FAILED', detail: '3D Solder Paste Thresholds' },
-    { num: '#4', label: 'PNP Pick & Place File (BOT/TOP)', status: job.checks.pnpBotTop ? 'PASSED' : 'FAILED', detail: 'Feeder Mapping Synchronized' },
-    { num: '#5', label: 'AOI Inspection File (BOT/TOP)', status: job.checks.aoiBotTop ? 'PASSED' : 'FAILED', detail: 'Initial AOI File Verified' },
-    { num: '#6', label: 'Passed Test? (Functional / ICT)', status: job.passedTest === 'Yes' ? 'PASSED' : 'FAILED', detail: `Test Sign-Off: ${job.passedTestDate || 'Approved'}` },
-    { num: '#7', label: 'Passed QA? (Quality Assurance Sign-Off)', status: job.passedQa === 'Yes' ? 'PASSED' : 'FAILED', detail: `QA Sign-Off: ${job.passedQaDate || 'Approved'}` },
-    { num: '#8', label: 'AOI Final File (BOT/TOP)', status: job.checks.aoiFinalBotTop ? 'PASSED' : 'FAILED', detail: 'Final AOI Package Complete' },
+    { num: '#1', label: 'XY / ODB++ Gerber Files', status: job.checks?.xyOdb ? 'PASSED' : 'FAILED', detail: 'DFM & Stackup Approved' },
+    { num: '#2', label: 'Stencil File (BOT/TOP)', status: job.checks?.stencilBotTop ? 'PASSED' : 'FAILED', detail: 'Laser-Cut Step Stencil Verified' },
+    { num: '#3', label: 'SPI File (BOT/TOP)', status: job.checks?.spiBotTop ? 'PASSED' : 'FAILED', detail: '3D Solder Paste Thresholds' },
+    { num: '#4', label: 'PNP Pick & Place File (BOT/TOP)', status: job.checks?.pnpBotTop ? 'PASSED' : 'FAILED', detail: 'Feeder Mapping Synchronized' },
+    { num: '#5', label: 'AOI Inspection File (BOT/TOP)', status: job.checks?.aoiBotTop ? 'PASSED' : 'FAILED', detail: 'Initial AOI File Verified' },
+    { num: '#6', label: 'Passed Test? (Functional / ICT)', status: job.passedTest ? 'PASSED' : 'FAILED', detail: `Test Sign-Off: ${job.passedTestDate || 'Approved'}` },
+    { num: '#7', label: 'Passed QA? (Quality Assurance Sign-Off)', status: job.passedQa ? 'PASSED' : 'FAILED', detail: `QA Sign-Off: ${job.passedQaDate || 'Approved'}` },
+    { num: '#8', label: 'AOI Final File (BOT/TOP)', status: job.checks?.aoiFinalBotTop ? 'PASSED' : 'FAILED', detail: 'Final AOI Package Complete' },
   ];
 
   doc.setFont('helvetica', 'normal');
@@ -203,7 +208,7 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
   y += 2;
 
   // Section 4: Server Storage & Host File Destination
-  if (serverPath || fileName) {
+  if (fileName) {
     doc.setFillColor(239, 246, 255); // sky-50
     doc.roundedRect(margin, y, contentWidth, 12, 1.5, 1.5, 'F');
     doc.setDrawColor(186, 230, 253);
@@ -212,12 +217,12 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
     doc.setTextColor(3, 105, 161);
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
-    doc.text('HOST SERVER ARCHIVE DESTINATION:', margin + 3, y + 4.5);
+    doc.text('SYSTEM REFERENCE PATH:', margin + 3, y + 4.5);
 
     doc.setFont('courier', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
-    const fullPathStr = `${serverPath || '/var/reports/fai'}/${fileName || `${job.jobId}_Signoff.pdf`}`;
+    const fullPathStr = `/uploads/${fileName}`;
     doc.text(fullPathStr, margin + 3, y + 9);
 
     y += 16;
@@ -263,8 +268,8 @@ export function generateFaiCompletionPdf(options: FaiPdfOptions): jsPDF {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(15, 23, 42);
-  doc.text(`QA Passed Date: ${job.passedQaDate || '2026-08-30'}`, margin + signBoxWidth + 9, y + 10);
-  doc.text(`ICT Test Passed Date: ${job.passedTestDate || '2026-08-30'}`, margin + signBoxWidth + 9, y + 15);
+  doc.text(`QA Passed Date: ${job.passedQaDate || new Date().toISOString().split('T')[0]}`, margin + signBoxWidth + 9, y + 10);
+  doc.text(`ICT Test Passed Date: ${job.passedTestDate || new Date().toISOString().split('T')[0]}`, margin + signBoxWidth + 9, y + 15);
   doc.setTextColor(16, 185, 129);
   doc.setFont('helvetica', 'bold');
   doc.text('STATUS: QUALITY AUDIT CONFORMANT', margin + signBoxWidth + 9, y + 20);

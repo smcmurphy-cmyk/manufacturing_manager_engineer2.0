@@ -3,8 +3,11 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import multer from 'multer';
+import sql from 'mssql';
 import { createServer as createViteServer } from 'vite';
 import {
+  getPool,
   isDatabaseConnected,
   insertDocumentArchive,
   getDocumentArchives,
@@ -26,7 +29,24 @@ const BASE_REPORTS_DIR = process.env.REPORTS_OUTPUT_DIR || 'F:\\SQLData\\Reports
 const DEFAULT_STORAGE_DIR = process.env.FAI_STORAGE_DIR || path.join(BASE_REPORTS_DIR, 'FAI');
 const DEFAULT_AUDIT_STORAGE_DIR = process.env.AUDIT_STORAGE_DIR || path.join(BASE_REPORTS_DIR, 'Audits');
 const DEFAULT_NCR_STORAGE_DIR = process.env.NCR_STORAGE_DIR || path.join(BASE_REPORTS_DIR, 'NCRs');
+// 1. Ensure the public/uploads directory physically exists when the server starts
+const uploadDir = path.join(process.cwd(), 'public/uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
+// 2. Configure Multer to save files to that directory
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'public/uploads/');
+  },
+  filename: (req, file, cb) => {
+    // Keep the exact filename we passed from the frontend
+    cb(null, file.originalname); 
+  }
+});
+
+const upload = multer({ storage });
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 Bytes';
   const k = 1024;
@@ -150,7 +170,43 @@ async function startServer() {
   // -------------------------------------------------------------
   // DYNAMIC PDF UPLOAD & HISTORY ENDPOINTS
   // -------------------------------------------------------------
-  app.post('/api/:module/save-pdf', async (req, res) => {
+  app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    const file = req.file;
+    const ncrDataString = req.body.ncrData; 
+
+    if (!file) {
+      return res.status(400).json({ success: false, error: 'No file provided' });
+    }
+
+    const publicPath = `/uploads/${file.filename}`;
+    const db = await getPool(); 
+
+    // Insert the file record into MS SQL
+    const result = await db.request()
+      .input('FileName', sql.NVarChar, file.originalname)
+      .input('FileType', sql.NVarChar, file.mimetype || 'application/pdf')
+      .input('FilePath', sql.NVarChar, publicPath)
+      .input('FileSize', sql.Int, file.size)
+      .query(`
+        INSERT INTO UploadedFiles (FileName, FileType, FilePath, FileSize)
+        OUTPUT inserted.Id
+        VALUES (@FileName, @FileType, @FilePath, @FileSize)
+      `);
+
+    // Send the success JSON back to the React modal
+    res.status(201).json({ 
+      success: true, 
+      fileId: result.recordset[0].Id,
+      url: publicPath
+    });
+
+  } catch (error) {
+    console.error('Upload Error:', error);
+    res.status(500).json({ success: false, error: 'Internal Server Error' });
+  }
+});
+app.post('/api/:module/save-pdf', async (req, res) => {
     try {
       const { module } = req.params;
       const {

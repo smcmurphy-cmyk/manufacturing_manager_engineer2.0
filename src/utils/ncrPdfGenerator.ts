@@ -3,7 +3,6 @@ import { NCRRecord } from '../types';
 
 export interface NcrPdfOptions {
   ncr: NCRRecord;
-  serverPath?: string;
   fileName?: string;
   editor?: string;
   rootCauseNotes?: string;
@@ -14,7 +13,6 @@ export interface NcrPdfOptions {
 export function generateNcrPdf(options: NcrPdfOptions): jsPDF {
   const {
     ncr,
-    serverPath,
     fileName,
     editor = ncr.lastEditedBy || ncr.owner || 'Quality Assurance',
     rootCauseNotes = ncr.rootCauseAnalysis || 'Root cause investigation performed in accordance with AS9100D §8.7 and IPC-A-610 standards.',
@@ -260,12 +258,8 @@ export function generateNcrPdf(options: NcrPdfOptions): jsPDF {
   doc.setTextColor(100, 116, 139); // slate-500
   doc.text('Dynamic Engineering Operations — AS9100D QMS & IPC-A-610 Quality Records', margin, footerY + 4);
 
-  if (serverPath) {
-    const displayPath = `${serverPath}\\${fileName || `${ncr.ncrNumber}.pdf`}`;
-    doc.text(`Host Storage Path: ${displayPath}`, margin, footerY + 8);
-  } else {
-    doc.text(`Host Storage Path: Reports\\NCRs\\${fileName || `${ncr.ncrNumber}.pdf`}`, margin, footerY + 8);
-  }
+const displayPath = `/uploads/${fileName || `${ncr.ncrNumber}.pdf`}`;
+doc.text(`System Reference: ${displayPath}`, margin, footerY + 8);
 
   doc.text(`Page 1 of 1  |  Generated: ${timestamp}`, pageWidth - margin - 45, footerY + 4);
 

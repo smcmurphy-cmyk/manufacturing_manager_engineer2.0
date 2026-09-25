@@ -15,7 +15,6 @@ interface FaiCompletionModalProps {
 export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
   isOpen, onClose, job, onLoggedSuccess,
 }) => {
-  const [serverPath, setServerPath] = useState<string>('');
   const [fileName, setFileName] = useState<string>('');
   const [operatorName, setOperatorName] = useState<string>('Manufacturing Engineer');
   const [operatorNotes, setOperatorNotes] = useState<string>('');
@@ -36,14 +35,6 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
     const safeJobId = (job.jobId || 'FAI-JOB').replace(/[^a-zA-Z0-9_-]/g, '_');
     const safeAssembly = (job.assemblyName || 'Assembly').replace(/[^a-zA-Z0-9_-]/g, '_');
     setFileName(`${safeJobId}_${safeAssembly}_Signoff_${dateStr}.pdf`);
-
-    // Strictly fetch from the new backend, ignoring local storage cache
-    fetch('/api/fai/server-info')
-      .then((res) => res.json())
-      .then((info) => {
-        if (info.defaultStorageDir) setServerPath(info.defaultStorageDir);
-      })
-      .catch((err) => console.error('Failed to fetch server paths:', err));
   }, [isOpen, job]);
 
   if (!isOpen || !job) return null;
@@ -56,40 +47,40 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
       const timestampStr = new Date().toLocaleString();
       const pdfDoc = generateFaiCompletionPdf({
         job,
-        serverPath: serverPath.trim(),
         fileName: fileName.trim(),
         operatorName: operatorName.trim() || 'Lead SMT Quality Engineer',
         operatorNotes: operatorNotes.trim(),
         timestamp: timestampStr,
       });
 
-      const pdfBase64 = pdfDoc.output('datauristring');
+      // 1. Convert to Blob for memory efficiency
+      const pdfBlob = pdfDoc.output('blob');
 
-      const response = await fetch('/api/fai/save-pdf', {
+      // 2. Package into FormData
+      const formData = new FormData();
+      formData.append('file', pdfBlob, fileName.trim());
+      formData.append('jobData', JSON.stringify(job));
+
+      // 3. Post to the new Multer endpoint (No Content-Type header)
+      const response = await fetch('/api/upload', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          serverPath: serverPath.trim(),
-          fileName: fileName.trim(),
-          pdfBase64,
-          operatorName: operatorName.trim(),
-          operatorNotes: operatorNotes.trim(),
-          jobData: { ...job },
-        }),
+        body: formData,
       });
 
       const result = await response.json();
 
       if (!response.ok || !result.success) {
-        throw new Error(result.message || 'Server failed to save PDF');
+        throw new Error(result.error || 'Server failed to save PDF');
       }
 
+      // 4. Update the path based on the server's clean URL response
       setSavedDetails({
-        savedPath: result.savedPath,
-        fileName: result.fileName,
-        fileSize: result.fileSize,
-        timestamp: result.timestamp,
+        savedPath: result.url,
+        fileName: fileName.trim(),
+        fileSize: 'File Saved',
+        timestamp: timestampStr,
       });
+      
       setSaveSuccess(true);
       onLoggedSuccess(job.id);
     } catch (err: any) {
@@ -136,7 +127,7 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
                   <span>FAI Completion PDF Archived Successfully!</span>
                 </div>
                 <p className="text-emerald-700 text-xs leading-relaxed">
-                  The First Article Inspection sign-off certificate for <strong>{job.jobId}</strong> ({job.assemblyName}) has been generated and written to your server storage path.
+                  The First Article Inspection sign-off certificate for LOT <strong>{job.jobId}</strong> ({job.assemblyName}) has been generated and written to your server storage path.
                 </p>
 
                 <div className="p-3 bg-white rounded-lg border border-emerald-200 space-y-2">
@@ -161,7 +152,7 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const doc = generateFaiCompletionPdf({ job, serverPath: serverPath.trim(), fileName: fileName.trim(), operatorName: operatorName.trim() });
+                    const doc = generateFaiCompletionPdf({ job, fileName: fileName.trim(), operatorName: operatorName.trim() });
                     doc.save(fileName);
                   }}
                   className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg border border-slate-300 cursor-pointer"
@@ -194,19 +185,6 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
                   <div><span className="text-slate-500">Test Passed:</span><p className="font-semibold text-emerald-700">{job.passedTestDate || 'Approved'}</p></div>
                   <div><span className="text-slate-500">QA Passed:</span><p className="font-semibold text-emerald-700">{job.passedQaDate || 'Approved'}</p></div>
                 </div>
-              </div>
-
-              <div className="space-y-2 p-3.5 bg-sky-50/40 rounded-xl border border-sky-200">
-                <label className="flex items-center gap-1.5 font-bold text-slate-800">
-                  <HardDrive className="w-4 h-4 text-sky-600" /> Server Storage Location
-                </label>
-                <input
-                  type="text"
-                  value={serverPath}
-                  onChange={(e) => setServerPath(e.target.value)}
-                  className="w-full p-2.5 bg-white border border-slate-300 rounded-lg font-mono text-xs text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-sky-500"
-                  required
-                />
               </div>
 
               <div>
@@ -259,7 +237,7 @@ export const FaiCompletionModal: React.FC<FaiCompletionModalProps> = ({
                 <button
                   type="button"
                   onClick={handleSaveAndLog}
-                  disabled={isSaving || !serverPath.trim() || !fileName.trim()}
+                  disabled={isSaving || !fileName.trim()}
                   className="inline-flex items-center gap-2 px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow-sm cursor-pointer disabled:opacity-50"
                 >
                   {isSaving ? <><RefreshCw className="w-4 h-4 animate-spin" /><span>Saving...</span></> : <><CheckCircle2 className="w-4 h-4" /><span>Confirm & Save PDF</span></>}
