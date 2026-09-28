@@ -165,6 +165,20 @@ export interface AssetRecord {
   alertEmail: string;
   serialNumber: string;
 }
+export interface CapitalEquipmentRecord {
+  id?: string;
+  manufacturer: string;
+  modelNumber: string;
+  serialNumber: string;
+  inServiceDate: string;
+  location: string;
+  frequencyDays: number;
+  currentMaintenanceDate: string;
+  nextMaintenanceDate: string;
+  assignedCustodian: string;
+  alertEmail: string;
+  status: 'Operational' | 'Maintenance Required' | 'Out of Service';
+}
 
 export interface NotificationAlert {
   id: string;
