@@ -492,6 +492,41 @@ app.post('/api/:module/save-pdf', async (req, res) => {
       res.status(500).json({ error: 'Internal server error processing barcode scan.' });
     }
   });
+  // -------------------------------------------------------------
+  // FETCH LIVE WIP DASHBOARD DATA
+  // -------------------------------------------------------------
+  app.get('/api/wip/active', async (req, res) => {
+    try {
+      const db = await getPool(); 
+      const result = await db.request().query(`
+        WITH RankedJobs AS (
+          SELECT 
+            JobId, 
+            StationSequence, 
+            StationName, 
+            StartedAt, 
+            CompletedAt,
+            ROW_NUMBER() OVER(PARTITION BY JobId ORDER BY StationSequence DESC) as rn
+          FROM JobRouting
+          WHERE StartedAt IS NOT NULL
+        )
+        SELECT 
+          JobId, 
+          StationSequence, 
+          StationName, 
+          StartedAt, 
+          CompletedAt
+        FROM RankedJobs 
+        WHERE rn = 1 AND (StationSequence < 60 OR CompletedAt IS NULL)
+        ORDER BY StartedAt DESC;
+      `);
+
+      res.status(200).json(result.recordset);
+    } catch (err) {
+      console.error('WIP Dashboard Error:', err);
+      res.status(500).json({ error: 'Failed to fetch active WIP data' });
+    }
+  });
   // Vite middleware setup
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });

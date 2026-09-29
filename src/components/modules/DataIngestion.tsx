@@ -15,12 +15,14 @@ import {
   HardDrive,
   FolderArchive,
   FileText,
+  ScanBarcode, 
   Pencil,
 } from 'lucide-react';
 import { DueDateCategory, EngineeringJob, PipelineStatus } from '../../types';
 import { FaiCompletionModal } from '../modals/FaiCompletionModal';
 import { FaiArchiveHistoryModal } from '../modals/FaiArchiveHistoryModal';
 import { FaiEditModal } from '../modals/FaiEditModal';
+import { generateTravelerPdf } from '../../utils/travelerPdfGenerator';
 
 interface DataIngestionProps {
   jobs: EngineeringJob[];
@@ -273,6 +275,18 @@ export const DataIngestion: React.FC<DataIngestionProps> = ({
                     <Pencil className="w-3 h-3 text-sky-600" />
                     <span>Edit Form</span>
                   </button>
+
+                  {/* NEW BARCODE TRAVELER BUTTON */}
+                  <button
+                    type="button"
+                    onClick={() => generateTravelerPdf(job)}
+                    title="Generate printable AS9100 WIP routing ticket"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-2xs transition-colors cursor-pointer"
+                  >
+                    <ScanBarcode className="w-3.5 h-3.5 text-slate-500" />
+                    <span>Print Traveler</span>
+                  </button>
+
                 </div>
               </div>
 
