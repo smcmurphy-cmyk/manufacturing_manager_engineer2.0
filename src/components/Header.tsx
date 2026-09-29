@@ -50,6 +50,12 @@ export const Header: React.FC<HeaderProps> = ({
           code: 'Module 05 • Q3 FY2026 (Jul 1 – Sep 30) • AS9100D & ISO 9001',
           description: 'Aggregated documents from Modules 1–4 (Opened, Closed, Active, Completed) & ZIP archival engine',
         };
+      case 'wip-tracking':
+        return {
+          title: 'Shop Floor WIP Routing & Barcode Tracking',
+          code: 'Module 06 • Station Sequence Enforcement',
+          description: 'Physical barcode kiosk for scanning lots in/out of manufacturing process stations',
+        };
     }
   };
 

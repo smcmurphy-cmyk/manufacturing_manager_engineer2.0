@@ -12,6 +12,7 @@ import {
   X,
   Factory,
   FileSpreadsheet,
+  MonitorSmartphone,
   Archive
 } from 'lucide-react';
 import { ActiveModule } from '../types';
@@ -71,6 +72,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
       icon: Wrench,
       badge: calAlertsCount > 0 ? `${calAlertsCount} Due` : undefined,
       badgeColor: 'bg-amber-100 text-amber-800 border-amber-300',
+    },
+    {
+      id: 'wip-tracking' as ActiveModule,
+      name: 'Shop Floor WIP',
+      subtitle: 'Station Barcode Routing',
+      icon: MonitorSmartphone,
+      badge: 'Active',
+      badgeColor: 'bg-sky-100 text-sky-800 border-sky-300',
     },
     {
       id: 'quarterly-reporting' as ActiveModule,

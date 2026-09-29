@@ -424,7 +424,74 @@ app.post('/api/:module/save-pdf', async (req, res) => {
     try { await saveAllJobs(req.body.jobs); res.json({ success: true, count: req.body.jobs.length }); } 
     catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
   });
+// -------------------------------------------------------------
+  // SHOP FLOOR WIP ROUTING & BARCODE SCANNER ENDPOINT
+  // -------------------------------------------------------------
+  app.post('/api/wip/scan', async (req, res) => {
+    const { jobId, stationSequence, action } = req.body;
 
+    try {
+      const db = await getPool(); 
+      
+      // 1. Get the current routing state for this LOT
+      const result = await db.request()
+        .input('jobId', sql.NVarChar, jobId)
+        .query(`SELECT * FROM JobRouting WHERE JobId = @jobId ORDER BY StationSequence ASC`);
+        
+      const routing = result.recordset;
+      
+      if (routing.length === 0) {
+        return res.status(404).json({ error: `HALT: ${jobId} not found in routing system.` });
+      }
+
+      const currentStation = routing.find((r: any) => r.StationSequence === stationSequence);
+      const prevStation = routing.find((r: any) => r.StationSequence === stationSequence - 10);
+
+      if (!currentStation) {
+        return res.status(400).json({ error: `HALT: Invalid station sequence configured.` });
+      }
+
+      // 2. Process "SCAN IN" (START)
+      if (action === 'START') {
+        // Sequence Enforcement Check: Did the previous station finish?
+        if (prevStation && !prevStation.CompletedAt) {
+          return res.status(400).json({ 
+            error: `HALT: Cannot start ${currentStation.StationName}. Previous station (${prevStation.StationName}) was skipped or incomplete.` 
+          });
+        }
+        
+        await db.request()
+          .input('jobId', sql.NVarChar, jobId)
+          .input('seq', sql.Int, stationSequence)
+          .query(`UPDATE JobRouting SET StartedAt = GETDATE() WHERE JobId = @jobId AND StationSequence = @seq`);
+          
+        return res.json({ message: `SUCCESS: ${jobId} logged into ${currentStation.StationName}` });
+      }
+
+      // 3. Process "SCAN OUT" (COMPLETE)
+      if (action === 'COMPLETE') {
+        // Enforcement Check: Did they actually scan into this station first?
+        if (!currentStation.StartedAt) {
+          return res.status(400).json({ 
+            error: `HALT: Cannot scan out. ${jobId} was never scanned into ${currentStation.StationName}.` 
+          });
+        }
+
+        await db.request()
+          .input('jobId', sql.NVarChar, jobId)
+          .input('seq', sql.Int, stationSequence)
+          .query(`UPDATE JobRouting SET CompletedAt = GETDATE() WHERE JobId = @jobId AND StationSequence = @seq`);
+          
+        return res.json({ message: `SUCCESS: ${jobId} completed at ${currentStation.StationName}` });
+      }
+
+      return res.status(400).json({ error: 'Invalid scanner action payload.' });
+
+    } catch (err) {
+      console.error('WIP Scan Error:', err);
+      res.status(500).json({ error: 'Internal server error processing barcode scan.' });
+    }
+  });
   // Vite middleware setup
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });

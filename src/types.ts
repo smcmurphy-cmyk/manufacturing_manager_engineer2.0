@@ -1,4 +1,4 @@
-export type ActiveModule = 'compliance' | 'training' | 'data-ingestion' | 'asset-maintenance' | 'quarterly-reporting';
+export type ActiveModule = 'compliance' | 'training' | 'data-ingestion' | 'asset-maintenance' | 'quarterly-reporting' | 'wip-tracking';
 
 export interface SystemConfig {
   organization: string;

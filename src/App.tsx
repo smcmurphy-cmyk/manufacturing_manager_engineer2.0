@@ -16,7 +16,7 @@ import { AssetMaintenance } from './components/modules/AssetMaintenance';
 import { QuarterlyReporting } from './components/modules/QuarterlyReporting';
 import { AlertsModal } from './components/modals/AlertsModal';
 import { buildLiveQ3QuarterlyDocuments } from './utils/quarterlyData';
-
+import { StationKiosk } from './components/modules/StationKiosk';
 // Local storage cache keys for zero-latency instant reload
 const CACHE_KEYS = {
   ASSETS: 'QMS_ASSET_REGISTRY_V2',
@@ -503,7 +503,9 @@ export default function App() {
               onOpenAlertModal={() => setIsAlertModalOpen(true)}
             />
           )}
-
+          {activeModule === 'wip-tracking' && (
+            <StationKiosk />
+          )}
           {activeModule === 'quarterly-reporting' && (
             <QuarterlyReporting
               ncrs={ncrs}
