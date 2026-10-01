@@ -41,9 +41,16 @@ export const StationKiosk: React.FC = () => {
     }
   }, [stationSeq, viewMode]);
 
-  // Aggressive auto-focus to ensure the scanner is always ready
+// Aggressive auto-focus to ensure the scanner is always ready
   useEffect(() => {
-    const enforceFocus = () => {
+    const enforceFocus = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      
+      // Do not steal focus if the user is clicking a dropdown or a button
+      if (target.tagName === 'SELECT' || target.tagName === 'OPTION' || target.tagName === 'BUTTON' || target.closest('button')) {
+        return;
+      }
+      
       if (viewMode === 'KIOSK' && document.activeElement !== inputRef.current) {
         inputRef.current?.focus();
       }

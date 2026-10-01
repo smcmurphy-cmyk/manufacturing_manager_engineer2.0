@@ -492,7 +492,7 @@ app.post('/api/:module/save-pdf', async (req, res) => {
       res.status(500).json({ error: 'Internal server error processing barcode scan.' });
     }
   });
-  // -------------------------------------------------------------
+// -------------------------------------------------------------
   // FETCH LIVE WIP DASHBOARD DATA
   // -------------------------------------------------------------
   app.get('/api/wip/active', async (req, res) => {
@@ -526,10 +526,166 @@ app.post('/api/:module/save-pdf', async (req, res) => {
       console.error('WIP Dashboard Error:', err);
       res.status(500).json({ error: 'Failed to fetch active WIP data' });
     }
+  }); // <-- This closing bracket was missing!
+
+  // -------------------------------------------------------------
+  // CAPITAL EQUIPMENT & PM LOG API
+  // -------------------------------------------------------------
+
+  // Fetch all capital equipment records
+  app.get('/api/equipment', async (_req, res) => {
+    try {
+      const db = await getPool();
+      const result = await db.request().query(`
+        SELECT * FROM CapitalEquipment ORDER BY EquipmentName ASC
+      `);
+      res.status(200).json(result.recordset);
+    } catch (err) {
+      console.error('Equipment Fetch Error:', err);
+      res.status(500).json({ error: 'Failed to fetch equipment records.' });
+    }
+  });
+
+  // Create or update equipment record
+  app.post('/api/equipment', async (req, res) => {
+    const {
+      AssetTag,
+      EquipmentName,
+      Model,
+      SerialNumber,
+      Location,
+      PmFrequency,
+      LastPmDate,
+      NextPmDate,
+      Status,
+      Notes
+    } = req.body;
+
+    if (!AssetTag || !EquipmentName) {
+      return res.status(400).json({ error: 'AssetTag and EquipmentName are required.' });
+    }
+
+    try {
+      const db = await getPool();
+      await db.request()
+        .input('AssetTag', sql.NVarChar(50), AssetTag)
+        .input('EquipmentName', sql.NVarChar(100), EquipmentName)
+        .input('Model', sql.NVarChar(100), Model || null)
+        .input('SerialNumber', sql.NVarChar(100), SerialNumber || null)
+        .input('Location', sql.NVarChar(100), Location || null)
+        .input('PmFrequency', sql.NVarChar(50), PmFrequency || null)
+        .input('LastPmDate', sql.Date, LastPmDate || null)
+        .input('NextPmDate', sql.Date, NextPmDate || null)
+        .input('Status', sql.NVarChar(50), Status || 'Operational')
+        .input('Notes', sql.NVarChar(sql.MAX), Notes || null)
+        .query(`
+          MERGE CapitalEquipment AS target
+          USING (SELECT @AssetTag AS AssetTag) AS source
+          ON (target.AssetTag = source.AssetTag)
+          WHEN MATCHED THEN
+            UPDATE SET 
+              EquipmentName = @EquipmentName,
+              Model = @Model,
+              SerialNumber = @SerialNumber,
+              Location = @Location,
+              PmFrequency = @PmFrequency,
+              LastPmDate = @LastPmDate,
+              NextPmDate = @NextPmDate,
+              Status = @Status,
+              Notes = @Notes,
+              UpdatedAt = GETDATE()
+          WHEN NOT MATCHED THEN
+            INSERT (AssetTag, EquipmentName, Model, SerialNumber, Location, PmFrequency, LastPmDate, NextPmDate, Status, Notes)
+            VALUES (@AssetTag, @EquipmentName, @Model, @SerialNumber, @Location, @PmFrequency, @LastPmDate, @NextPmDate, @Status, @Notes);
+        `);
+
+      res.status(200).json({ message: 'Equipment record saved successfully.' });
+    } catch (err) {
+      console.error('Equipment Save Error:', err);
+      res.status(500).json({ error: 'Failed to save equipment record.' });
+    }
+  });
+
+  // -------------------------------------------------------------
+  // ASSET CALIBRATION REGISTRY API
+  // -------------------------------------------------------------
+
+  // Fetch all calibration registry records
+  app.get('/api/calibration', async (_req, res) => {
+    try {
+      const db = await getPool();
+      const result = await db.request().query(`
+        SELECT * FROM CalibrationRegistry ORDER BY CalDueDate ASC
+      `);
+      res.status(200).json(result.recordset);
+    } catch (err) {
+      console.error('Calibration Fetch Error:', err);
+      res.status(500).json({ error: 'Failed to fetch calibration records.' });
+    }
+  });
+
+  // Create or update calibration record
+  app.post('/api/calibration', async (req, res) => {
+    const {
+      ToolId,
+      Description,
+      SerialNumber,
+      Location,
+      CalInterval,
+      LastCalDate,
+      CalDueDate,
+      CertNumber,
+      Status,
+      Notes
+    } = req.body;
+
+    if (!ToolId || !Description) {
+      return res.status(400).json({ error: 'ToolId and Description are required.' });
+    }
+
+    try {
+      const db = await getPool();
+      await db.request()
+        .input('ToolId', sql.NVarChar(50), ToolId)
+        .input('Description', sql.NVarChar(100), Description)
+        .input('SerialNumber', sql.NVarChar(100), SerialNumber || null)
+        .input('Location', sql.NVarChar(100), Location || null)
+        .input('CalInterval', sql.NVarChar(50), CalInterval || null)
+        .input('LastCalDate', sql.Date, LastCalDate || null)
+        .input('CalDueDate', sql.Date, CalDueDate || null)
+        .input('CertNumber', sql.NVarChar(100), CertNumber || null)
+        .input('Status', sql.NVarChar(50), Status || 'Calibrated')
+        .input('Notes', sql.NVarChar(sql.MAX), Notes || null)
+        .query(`
+          MERGE CalibrationRegistry AS target
+          USING (SELECT @ToolId AS ToolId) AS source
+          ON (target.ToolId = source.ToolId)
+          WHEN MATCHED THEN
+            UPDATE SET 
+              Description = @Description,
+              SerialNumber = @SerialNumber,
+              Location = @Location,
+              CalInterval = @CalInterval,
+              LastCalDate = @LastCalDate,
+              CalDueDate = @CalDueDate,
+              CertNumber = @CertNumber,
+              Status = @Status,
+              Notes = @Notes,
+              UpdatedAt = GETDATE()
+          WHEN NOT MATCHED THEN
+            INSERT (ToolId, Description, SerialNumber, Location, CalInterval, LastCalDate, CalDueDate, CertNumber, Status, Notes)
+            VALUES (@ToolId, @Description, @SerialNumber, @Location, @CalInterval, @LastCalDate, @CalDueDate, @CertNumber, @Status, @Notes);
+        `);
+
+      res.status(200).json({ message: 'Calibration record saved successfully.' });
+    } catch (err) {
+      console.error('Calibration Save Error:', err);
+      res.status(500).json({ error: 'Failed to save calibration record.' });
+    }
   });
   // Vite middleware setup
   if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
+    const vite = await createViteServer({ server: { middlewareMode: true, host: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');

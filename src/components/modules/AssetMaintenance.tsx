@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Wrench, Search, Plus, AlertTriangle, CheckCircle2, Clock, Mail, Calendar, 
   Zap, Activity, FileEdit, X, FileCheck, ChevronDown, ChevronUp, Layers, Settings
@@ -8,7 +8,7 @@ import { EditAssetDocumentModal } from '../modals/EditAssetDocumentModal';
 import { EditCapitalEquipmentModal } from '../modals/EditCapitalEquipmentModal';
 
 interface AssetMaintenanceProps {
-  assets: AssetRecord[];
+  assets: AssetRecord[]; // Kept for prop compatibility, but managed internally via DB now
   onAddAsset: (asset: AssetRecord) => void;
   onUpdateAsset?: (asset: AssetRecord) => void;
   onRecalibrate: (id: string) => void;
@@ -16,7 +16,6 @@ interface AssetMaintenanceProps {
 }
 
 export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
-  assets,
   onAddAsset,
   onUpdateAsset,
   onRecalibrate,
@@ -26,6 +25,10 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   
+  // Database States
+  const [calibrationAssets, setCalibrationAssets] = useState<AssetRecord[]>([]);
+  const [capitalAssets, setCapitalAssets] = useState<CapitalEquipmentRecord[]>([]);
+  
   // Metrology Asset State
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedAssetForEdit, setSelectedAssetForEdit] = useState<AssetRecord | null>(null);
@@ -34,37 +37,6 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
   // Capital Equipment State
   const [isCapitalModalOpen, setIsCapitalModalOpen] = useState(false);
   const [selectedCapitalAsset, setSelectedCapitalAsset] = useState<CapitalEquipmentRecord | null>(null);
-  const [capitalAssets, setCapitalAssets] = useState<CapitalEquipmentRecord[]>([
-    {
-      id: 'cap-1',
-      manufacturer: 'SAKI',
-      modelNumber: '3Di-LS2 SPI',
-      serialNumber: 'SK-99482-A',
-      inServiceDate: '2024-01-15',
-      location: 'SMT Line 1 - Apex',
-      frequencyDays: 90,
-      currentMaintenanceDate: '2026-06-15',
-      nextMaintenanceDate: '2026-09-15',
-      assignedCustodian: 'Shawn',
-      alertEmail: 'shawn@dyneng.com',
-      status: 'Operational'
-    },
-    {
-      id: 'cap-2',
-      manufacturer: 'Panasonic',
-      modelNumber: 'SPG Stencil Printer',
-      serialNumber: 'PN-11234-B',
-      inServiceDate: '2023-11-10',
-      location: 'SMT Line 1 - Apex',
-      frequencyDays: 180,
-      currentMaintenanceDate: '2026-05-10',
-      nextMaintenanceDate: '2026-11-10',
-      assignedCustodian: 'Shawn',
-      alertEmail: 'shawn@dyneng.com',
-      status: 'Operational'
-    }
-  ]);
-
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -72,19 +44,147 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleSaveAssetDocument = (updatedAsset: AssetRecord) => {
-    if (onUpdateAsset) onUpdateAsset(updatedAsset);
-    showToast(`Document for ${updatedAsset.assetId} updated successfully`);
+  // 1. Fetch records from SQL on mount
+  const loadRecords = async () => {
+    try {
+      const [eqRes, calRes] = await Promise.all([
+        fetch('/api/equipment'),
+        fetch('/api/calibration')
+      ]);
+
+      if (eqRes.ok) {
+        const eqData = await eqRes.json();
+        // Map SQL schema back to Frontend interface
+        const mappedCapital = eqData.map((row: any) => ({
+          id: row.AssetTag,
+          manufacturer: row.EquipmentName,
+          modelNumber: row.Model || '',
+          serialNumber: row.SerialNumber || '',
+          location: row.Location || '',
+          frequencyDays: row.PmFrequency ? parseInt(row.PmFrequency) : 0,
+          currentMaintenanceDate: row.LastPmDate ? row.LastPmDate.split('T')[0] : '',
+          nextMaintenanceDate: row.NextPmDate ? row.NextPmDate.split('T')[0] : '',
+          assignedCustodian: 'Shawn', // Defaulting for display
+          alertEmail: 'shawn@dyneng.com',
+          status: row.Status || 'Operational'
+        }));
+        setCapitalAssets(mappedCapital);
+      }
+      
+      if (calRes.ok) {
+        const calData = await calRes.json();
+        // Map SQL schema back to Frontend interface
+        const mappedCal = calData.map((row: any) => ({
+          id: row.ToolId,
+          assetId: row.ToolId,
+          equipmentDescription: row.Description,
+          serialNumber: row.SerialNumber || '',
+          departmentLocation: row.Location || '',
+          intervalDays: row.CalInterval ? parseInt(row.CalInterval) : 365,
+          lastCompleted: row.LastCalDate ? row.LastCalDate.split('T')[0] : '',
+          nextDueDate: row.CalDueDate ? row.CalDueDate.split('T')[0] : '',
+          status: row.Status || 'Operational / Calibrated'
+        }));
+        setCalibrationAssets(mappedCal);
+      }
+    } catch (err) {
+      console.error('Failed to load maintenance records from DB:', err);
+    }
   };
 
-  const handleSaveCapitalAsset = (record: CapitalEquipmentRecord) => {
-    if (record.id) {
-      setCapitalAssets(prev => prev.map(r => r.id === record.id ? record : r));
-      showToast(`${record.manufacturer} ${record.modelNumber} updated successfully`);
-    } else {
-      setCapitalAssets(prev => [...prev, { ...record, id: `cap-${Date.now()}` }]);
-      showToast(`${record.manufacturer} ${record.modelNumber} registered successfully`);
+  useEffect(() => {
+    loadRecords();
+  }, []);
+
+  // 2. Database Save Handlers
+const handleSaveCapitalAsset = async (record: CapitalEquipmentRecord) => {
+    // Map the React record to the expected SQL database payload
+    const dbPayload = {
+      AssetTag: record.id || `CAP-${Math.floor(Math.random() * 10000)}`,
+      EquipmentName: record.manufacturer || 'Unknown Equipment',
+      Model: record.modelNumber || '',
+      SerialNumber: record.serialNumber || '',
+      Location: record.location || '',
+      PmFrequency: record.frequencyDays?.toString() || '0',
+      LastPmDate: record.currentMaintenanceDate || null,
+      NextPmDate: record.nextMaintenanceDate || null,
+      Status: record.status || 'Operational',
+      Notes: ''
+    };
+
+    try {
+      const res = await fetch('/api/equipment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dbPayload)
+      });
+
+      if (res.ok) {
+        showToast(`${dbPayload.EquipmentName} updated successfully in database`);
+        await loadRecords(); // Await the refresh so the UI updates instantly
+        setIsCapitalModalOpen(false);
+      } else {
+        // Capture and display exact database rejection reasons
+        const errData = await res.json();
+        console.error('Server rejected payload:', errData);
+        alert(`Failed to save: ${errData.error || 'Invalid data format'}`);
+      }
+    } catch (err) {
+      console.error('Error saving capital equipment:', err);
+      alert('Critical Error: Could not connect to the Express backend.');
     }
+  };
+
+  const saveCalibrationToDb = async (asset: AssetRecord) => {
+    const dbPayload = {
+      ToolId: asset.assetId,
+      Description: asset.equipmentDescription,
+      SerialNumber: asset.serialNumber,
+      Location: asset.departmentLocation,
+      CalInterval: asset.intervalDays?.toString(),
+      LastCalDate: asset.lastCompleted,
+      CalDueDate: asset.nextDueDate,
+      Status: asset.status,
+      Notes: ''
+    };
+
+    try {
+      const res = await fetch('/api/calibration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dbPayload)
+      });
+
+      if (res.ok) {
+        showToast(`Asset ${asset.assetId} saved to registry`);
+        loadRecords();
+      }
+    } catch (err) {
+      console.error('Error saving calibration record:', err);
+    }
+  };
+
+  const handleCreateAsset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAsset.equipmentDescription.trim()) return;
+    const info = getCalculatedDueInfo(newAsset.lastCompleted, Number(newAsset.intervalDays));
+    const asset: AssetRecord = {
+      id: `asset-${Date.now()}`,
+      ...newAsset,
+      intervalDays: Number(newAsset.intervalDays),
+      nextDueDate: info.dueDateStr,
+      status: info.status,
+    };
+    
+    await saveCalibrationToDb(asset);
+    if (onAddAsset) onAddAsset(asset);
+    setShowAddModal(false);
+  };
+
+  const handleSaveAssetDocument = async (updatedAsset: AssetRecord) => {
+    await saveCalibrationToDb(updatedAsset);
+    if (onUpdateAsset) onUpdateAsset(updatedAsset);
+    setSelectedAssetForEdit(null);
   };
 
   const openCapitalModal = (asset: CapitalEquipmentRecord | null = null) => {
@@ -92,7 +192,7 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
     setIsCapitalModalOpen(true);
   };
 
-  const todayStr = '2026-08-30'; // reference app time
+  const todayStr = new Date().toISOString().split('T')[0];
 
   const getCalculatedDueInfo = (lastCompletedStr: string, intervalDays: number, manualDueDate?: string, recordedStatus?: AssetStatus) => {
     if (Number(intervalDays) === 0 || recordedStatus === 'No Calibration Necessary') {
@@ -116,19 +216,19 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
     return { dueDateStr: dueDate.toISOString().split('T')[0], diffDays, status, isExempt: false };
   };
 
-  const filteredAssets = assets.filter((asset) => {
+  const filteredAssets = calibrationAssets.filter((asset) => {
     const info = getCalculatedDueInfo(asset.lastCompleted, asset.intervalDays, asset.nextDueDate, asset.status);
     const matchesSearch = asset.assetId.toLowerCase().includes(searchTerm.toLowerCase()) || asset.equipmentDescription.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || info.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
-  const operationalAssets = assets.filter(a => getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status).status === 'Operational / Calibrated');
-  const dueSoonAssets = assets.filter(a => getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status).status === 'Calibration Due Soon');
-  const overdueAssets = assets.filter(a => getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status).status === 'Cal Overdue');
+  const operationalAssets = calibrationAssets.filter(a => getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status).status === 'Operational / Calibrated');
+  const dueSoonAssets = calibrationAssets.filter(a => getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status).status === 'Calibration Due Soon');
+  const overdueAssets = calibrationAssets.filter(a => getCalculatedDueInfo(a.lastCompleted, a.intervalDays, a.nextDueDate, a.status).status === 'Cal Overdue');
 
   const [newAsset, setNewAsset] = useState({
-    assetId: `EQ-MET-0${assets.length + 15}`,
+    assetId: `EQ-MET-0${calibrationAssets.length + 15}`,
     equipmentDescription: '',
     departmentLocation: 'Engineering Test Lab (Bench 1)',
     intervalDays: 365,
@@ -137,22 +237,6 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
     alertEmail: 'murphy@dyneng.com',
     serialNumber: `SN-${Math.floor(10000 + Math.random() * 90000)}`,
   });
-
-  const handleCreateAsset = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAsset.equipmentDescription.trim()) return;
-    const info = getCalculatedDueInfo(newAsset.lastCompleted, Number(newAsset.intervalDays));
-    const asset: AssetRecord = {
-      id: `asset-${Date.now()}`,
-      ...newAsset,
-      intervalDays: Number(newAsset.intervalDays),
-      nextDueDate: info.dueDateStr,
-      status: info.status,
-    };
-    onAddAsset(asset);
-    setShowAddModal(false);
-    showToast(`Asset ${asset.assetId} successfully registered`);
-  };
 
   const getStatusBadgeClass = (status: string, diffDays?: number) => {
     if (status.includes('Operational')) return 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold';
@@ -170,11 +254,11 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
         </div>
       )}
 
-      {/* Metrics Row (Interactive Filter Cards) */}
+      {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <button onClick={() => { setActiveTab('registry'); setStatusFilter('ALL'); setSearchTerm(''); }} className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${activeTab === 'registry' && statusFilter === 'ALL' && !searchTerm ? 'bg-slate-50 border-slate-400 ring-2 ring-slate-800 shadow-xs' : 'bg-white border-slate-200 shadow-2xs hover:border-slate-300 hover:shadow-xs'}`}>
           <div className="flex items-center justify-between"><span className="text-xs font-semibold uppercase text-slate-500">Tracked Assets</span><Activity className="w-4 h-4 text-sky-600" /></div>
-          <p className="mt-2 text-2xl font-bold text-slate-900">{assets.length}</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{calibrationAssets.length}</p>
           <div className="mt-1 flex items-center justify-between"><p className="text-xs text-slate-500">Metrology & Verification</p><span className="text-[10px] text-sky-700 font-medium">{activeTab === 'registry' && statusFilter === 'ALL' && !searchTerm ? 'Showing all' : 'Click to view all'}</span></div>
         </button>
         <button onClick={() => { setActiveTab('registry'); setStatusFilter(prev => prev === 'Operational / Calibrated' && activeTab === 'registry' ? 'ALL' : 'Operational / Calibrated'); }} className={`p-4 rounded-xl border text-left transition-all cursor-pointer ${activeTab === 'registry' && statusFilter === 'Operational / Calibrated' ? 'bg-emerald-50/50 border-emerald-400 ring-2 ring-emerald-600 shadow-xs' : 'bg-white border-slate-200 shadow-2xs hover:border-emerald-300 hover:shadow-xs'}`}>
@@ -271,7 +355,6 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
           </div>
         ) : activeTab === 'registry' ? (
           <div className="p-4 sm:p-5 space-y-4">
-            {/* Same registry content as before */}
             <div className="overflow-x-auto border border-slate-200 rounded-lg">
               <table className="w-full text-left text-xs text-slate-700">
                 <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
@@ -309,13 +392,13 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
                       </React.Fragment>
                     );
                   })}
+                  {filteredAssets.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-slate-400">No active assets found.</td></tr>}
                 </tbody>
               </table>
             </div>
           </div>
         ) : (
           <div className="p-4 sm:p-5 space-y-4">
-             {/* Sub-tab 2: Audit Logs */}
              <div className="border border-slate-200 rounded-lg overflow-hidden">
               <div className="p-3.5 bg-slate-50 border-b flex items-center gap-2"><FileCheck className="w-4 h-4 text-emerald-600" /><h4 className="font-bold text-slate-700">Metrology Verification Logs</h4></div>
               <div className="p-8 text-center text-slate-500">Log visualization would render here...</div>
@@ -324,21 +407,109 @@ export const AssetMaintenance: React.FC<AssetMaintenanceProps> = ({
         )}
       </div>
 
-      {showAddModal && (
+     {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/50 backdrop-blur-xs">
-          <div className="w-full max-w-lg bg-white rounded-xl shadow-xl overflow-hidden">
-             {/* Original Add Metrology Modal Content Here */}
-             <div className="p-4 bg-slate-900 text-white flex justify-between"><h3 className="font-semibold">Register Metrology Tool</h3><button onClick={() => setShowAddModal(false)}><X className="w-5 h-5"/></button></div>
-             <form onSubmit={handleCreateAsset} className="p-4 space-y-3">
-               <div><label>Equipment Description</label><input type="text" value={newAsset.equipmentDescription} onChange={e => setNewAsset({...newAsset, equipmentDescription: e.target.value})} className="w-full border p-2 rounded" required /></div>
-               <button type="submit" className="w-full bg-sky-600 text-white py-2 rounded">Save Metrology Tool</button>
-             </form>
+          <div className="w-full max-w-2xl bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden">
+            <div className="p-4 sm:p-5 bg-slate-900 text-white flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold">Register Metrology Tool</h3>
+                <p className="text-xs text-slate-300">Add a new gage or tool to the AS9100 calibration registry</p>
+              </div>
+              <button onClick={() => setShowAddModal(false)} className="text-slate-400 hover:text-white transition-colors cursor-pointer">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAsset} className="p-4 sm:p-5 space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Tool ID / Asset Tag</label>
+                  <input
+                    type="text"
+                    value={newAsset.assetId}
+                    onChange={(e) => setNewAsset({ ...newAsset, assetId: e.target.value })}
+                    className="w-full p-2 bg-slate-50 border border-slate-200 rounded font-mono focus:ring-2 focus:ring-sky-500 outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Equipment Description</label>
+                  <input
+                    type="text"
+                    value={newAsset.equipmentDescription}
+                    onChange={(e) => setNewAsset({ ...newAsset, equipmentDescription: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-200 rounded focus:ring-2 focus:ring-sky-500 outline-none"
+                    placeholder="e.g. 0-6 inch Digital Calipers"
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Serial Number</label>
+                  <input
+                    type="text"
+                    value={newAsset.serialNumber}
+                    onChange={(e) => setNewAsset({ ...newAsset, serialNumber: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-200 rounded font-mono focus:ring-2 focus:ring-sky-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Department / Location</label>
+                  <input
+                    type="text"
+                    value={newAsset.departmentLocation}
+                    onChange={(e) => setNewAsset({ ...newAsset, departmentLocation: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-200 rounded focus:ring-2 focus:ring-sky-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Calibration Interval (Days)</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      value={newAsset.intervalDays}
+                      onChange={(e) => setNewAsset({ ...newAsset, intervalDays: parseInt(e.target.value) || 0 })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded font-mono focus:ring-2 focus:ring-sky-500 outline-none"
+                      required
+                    />
+                    <span className="text-slate-500 font-medium">Days</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">Last Calibrated Date</label>
+                  <input
+                    type="date"
+                    value={newAsset.lastCompleted}
+                    onChange={(e) => setNewAsset({ ...newAsset, lastCompleted: e.target.value })}
+                    className="w-full p-2 bg-white border border-slate-200 rounded font-mono focus:ring-2 focus:ring-sky-500 outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-sm transition-colors cursor-pointer"
+                >
+                  Save to Registry
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
       <EditAssetDocumentModal isOpen={Boolean(selectedAssetForEdit)} asset={selectedAssetForEdit} onClose={() => setSelectedAssetForEdit(null)} onSave={handleSaveAssetDocument} />
-      
       <EditCapitalEquipmentModal isOpen={isCapitalModalOpen} record={selectedCapitalAsset} onClose={() => setIsCapitalModalOpen(false)} onSave={handleSaveCapitalAsset} />
     </div>
   );
