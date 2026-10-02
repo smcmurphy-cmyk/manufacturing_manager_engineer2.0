@@ -117,12 +117,11 @@ export interface TrainingRecord {
 
 // Module 3: FAI validation & Logging
 export type PipelineStatus = 'Edit' | 'Draft' | 'Validation Complete' | 'Dispatched to Line' | 'Hold';
-export type DueDateCategory = 'ASAP' | 'Development' | 'Stock';
 
 export interface EngineeringJob {
   id: string;
   jobId: string; // FAI#
-  dueDate: DueDateCategory | string;
+  dueDate: string;
   projectCode?: string;
   customer?: string;
   quantity?: number | string;

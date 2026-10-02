@@ -135,17 +135,14 @@ export const FaiEditModal: React.FC<FaiEditModalProps> = ({
               />
             </div>
             <div>
-              <label className="block font-medium text-slate-700 mb-1">Due Date / Priority</label>
-              <select
-                value={formData.dueDate}
-                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value as DueDateCategory })}
-                className="w-full p-2 bg-slate-50 border border-slate-200 rounded font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500 cursor-pointer"
+              <label className="block font-medium text-slate-700 mb-1">Due Date</label>
+              <input
+                type="date"
+                value={formData.dueDate || ''}
+                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                className="w-full p-2 bg-slate-50 border border-slate-200 rounded font-medium text-slate-800 focus:bg-white focus:ring-2 focus:ring-sky-500"
                 required
-              >
-                <option value="ASAP">ASAP (Urgent / Line Stop)</option>
-                <option value="Development">Development (Standard Run)</option>
-                <option value="Stock">Stock (Inventory Buffer)</option>
-              </select>
+              />
             </div>
             <div>
               <label className="block font-medium text-slate-700 mb-1">Document Status</label>

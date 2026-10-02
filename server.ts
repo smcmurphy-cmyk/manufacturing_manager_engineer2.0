@@ -23,6 +23,8 @@ import {
   saveAllTraining,
   getJobs,
   saveAllJobs,
+  updateSingleTraining,
+  updateSingleJob,
 } from './db';
 
 const BASE_REPORTS_DIR = process.env.REPORTS_OUTPUT_DIR || 'F:\\SQLData\\Reports';
@@ -405,21 +407,42 @@ app.post('/api/:module/save-pdf', async (req, res) => {
     catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
   });
 
-  // Training
+// Training
   app.get('/api/registry/training', async (req, res) => {
     try { res.json({ success: true, training: await getTraining() }); } 
     catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
   });
+  
+  app.post('/api/registry/training', async (req, res) => {
+    try { res.json({ success: true, training: await updateSingleTraining(req.body) }); } 
+    catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  });
+
+  app.put('/api/registry/training/:id', async (req, res) => {
+    try { res.json({ success: true, training: await updateSingleTraining({ ...req.body, id: req.params.id }) }); } 
+    catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  });
+
   app.post('/api/registry/training/batch', async (req, res) => {
     try { await saveAllTraining(req.body.training); res.json({ success: true, count: req.body.training.length }); } 
     catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
   });
-
-  // Jobs
+ // Jobs
   app.get('/api/registry/jobs', async (req, res) => {
     try { res.json({ success: true, jobs: await getJobs() }); } 
     catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
   });
+  
+  app.post('/api/registry/jobs', async (req, res) => {
+    try { res.json({ success: true, job: await updateSingleJob(req.body) }); } 
+    catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  });
+
+  app.put('/api/registry/jobs/:id', async (req, res) => {
+    try { res.json({ success: true, job: await updateSingleJob({ ...req.body, id: req.params.id }) }); } 
+    catch (err: any) { res.status(500).json({ success: false, message: err.message }); }
+  });
+
   app.post('/api/registry/jobs/batch', async (req, res) => {
     try { await saveAllJobs(req.body.jobs); res.json({ success: true, count: req.body.jobs.length }); } 
     catch (err: any) { res.status(500).json({ success: false, message: err.message }); }

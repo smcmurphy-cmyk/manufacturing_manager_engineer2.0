@@ -59,8 +59,11 @@ export default function App() {
 
   // Initial Sync from Backend (Postgres or Host Server JSON store)
   useEffect(() => {
+    // Force browsers to ignore their cache and fetch fresh SQL data
+    const fetchOpts = { cache: 'no-store' as RequestCache };
+
     // 1. Fetch DB Status
-    fetch('/api/db/status')
+    fetch('/api/db/status', fetchOpts)
       .then((res) => res.json())
       .then((status) => {
         setDbStatus(status);
@@ -68,7 +71,7 @@ export default function App() {
       .catch((err) => console.warn('Could not query DB status:', err));
 
     // 2. Fetch Assets
-    fetch('/api/registry/assets')
+    fetch('/api/registry/assets', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
         if (data?.assets && Array.isArray(data.assets) && data.assets.length > 0) {
@@ -79,7 +82,7 @@ export default function App() {
       .catch((err) => console.warn('Using cached assets:', err));
 
     // 3. Fetch NCRs
-    fetch('/api/registry/ncrs')
+    fetch('/api/registry/ncrs', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
         if (data?.ncrs && Array.isArray(data.ncrs) && data.ncrs.length > 0) {
@@ -90,7 +93,7 @@ export default function App() {
       .catch((err) => console.warn('Using cached NCRs:', err));
 
     // 4. Fetch Audits
-    fetch('/api/registry/audits')
+    fetch('/api/registry/audits', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
         if (data?.audits && Array.isArray(data.audits) && data.audits.length > 0) {
@@ -101,7 +104,7 @@ export default function App() {
       .catch((err) => console.warn('Using cached audits:', err));
 
     // 5. Fetch Training
-    fetch('/api/registry/training')
+    fetch('/api/registry/training', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
         if (data?.training && Array.isArray(data.training) && data.training.length > 0) {
@@ -112,7 +115,7 @@ export default function App() {
       .catch((err) => console.warn('Using cached training:', err));
 
     // 6. Fetch Jobs
-    fetch('/api/registry/jobs')
+    fetch('/api/registry/jobs', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
         if (data?.jobs && Array.isArray(data.jobs) && data.jobs.length > 0) {
@@ -194,173 +197,196 @@ export default function App() {
     }).catch((err) => console.warn('Backend audits sync failed:', err));
   };
 
-  // Handlers for Module 2: Training
+ // Handlers for Module 2: Training
   const handleAddTraining = (newRec: TrainingRecord) => {
     const updated = [newRec, ...training];
     setTraining(updated);
     setCached(CACHE_KEYS.TRAINING, updated);
-    fetch('/api/registry/training/batch', {
+    fetch('/api/registry/training', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ training: updated }),
-    }).catch((err) => console.warn('Backend training sync failed:', err));
+      body: JSON.stringify(newRec),
+    }).catch((err) => console.warn('Backend training save failed:', err));
   };
 
   const handleUpdateTrainingRecord = (updatedRec: TrainingRecord) => {
     const updated = training.map((t) => (t.id === updatedRec.id ? updatedRec : t));
     setTraining(updated);
     setCached(CACHE_KEYS.TRAINING, updated);
-    fetch('/api/registry/training/batch', {
-      method: 'POST',
+    fetch(`/api/registry/training/${encodeURIComponent(updatedRec.id)}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ training: updated }),
-    }).catch((err) => console.warn('Backend training sync failed:', err));
+      body: JSON.stringify(updatedRec),
+    }).catch((err) => console.warn('Backend training update failed:', err));
   };
 
   const handleRenewTraining = (id: string) => {
+    let targetRec: TrainingRecord | null = null;
     const updated = training.map((t) => {
       if (t.id !== id) return t;
       const now = new Date();
       const exp = new Date(now);
       exp.setFullYear(exp.getFullYear() + 2);
-      return {
+      targetRec = {
         ...t,
         issueDate: now.toISOString().split('T')[0],
         expirationDate: exp.toISOString().split('T')[0],
         status: 'Valid' as const,
         notes: `${t.notes ? t.notes + ' | ' : ''}Renewed on ${now.toISOString().split('T')[0]}`,
       };
+      return targetRec;
     });
     setTraining(updated);
     setCached(CACHE_KEYS.TRAINING, updated);
-    fetch('/api/registry/training/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ training: updated }),
-    }).catch((err) => console.warn('Backend training sync failed:', err));
+    if (targetRec) {
+      fetch(`/api/registry/training/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(targetRec),
+      }).catch((err) => console.warn('Backend training sync failed:', err));
+    }
   };
 
-  // Handlers for Module 3: Data Ingestion
+  // Handlers for Module 3: Data Ingestion (FAI)
   const handleAddJob = (newJob: EngineeringJob) => {
     const updated = [newJob, ...jobs];
     setJobs(updated);
     setCached(CACHE_KEYS.JOBS, updated);
-    fetch('/api/registry/jobs/batch', {
+    fetch('/api/registry/jobs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobs: updated }),
+      body: JSON.stringify(newJob),
     }).catch((err) => console.warn('Backend jobs sync failed:', err));
   };
 
   const handleToggleCheck = (jobId: string, checkKey: keyof EngineeringJob['checks']) => {
+    let targetJob: EngineeringJob | null = null;
     const updated = jobs.map((j) => {
       if (j.id !== jobId) return j;
-      const updatedChecks = {
-        ...j.checks,
-        [checkKey]: !j.checks[checkKey],
-      };
+      const updatedChecks = { ...j.checks, [checkKey]: !j.checks[checkKey] };
       const allChecks = Object.values(updatedChecks).every(Boolean);
-      const testPassed = j.passedTest === 'Yes';
-      const qaPassed = j.passedQa === 'Yes';
+      const testPassed = j.passedTest === 'Yes' || j.passedTest === true;
+      const qaPassed = j.passedQa === 'Yes' || j.passedQa === true;
       const allPassed = allChecks && testPassed && qaPassed;
-      return {
+      targetJob = {
         ...j,
         checks: updatedChecks,
         status: allPassed && (j.status === 'Edit' || (j.status as string) === 'Draft') ? 'Validation Complete' : (j.status === 'Validation Complete' && !allPassed ? 'Edit' : j.status),
       };
+      return targetJob;
     });
     setJobs(updated);
     setCached(CACHE_KEYS.JOBS, updated);
-    fetch('/api/registry/jobs/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobs: updated }),
-    }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    if (targetJob) {
+      fetch(`/api/registry/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(targetJob),
+      }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    }
   };
 
   const handleUpdatePassedTest = (jobId: string, passedTest: 'Yes' | 'No', testDate?: string) => {
+    let targetJob: EngineeringJob | null = null;
     const updated = jobs.map((j) => {
       if (j.id !== jobId) return j;
-      const updatedJob = {
-        ...j,
-        passedTest,
-        passedTestDate: testDate !== undefined ? testDate : j.passedTestDate,
-      };
+      const updatedJob = { ...j, passedTest, passedTestDate: testDate !== undefined ? testDate : j.passedTestDate };
       const allChecks = Object.values(updatedJob.checks).every(Boolean);
-      const testPassed = updatedJob.passedTest === 'Yes';
-      const qaPassed = updatedJob.passedQa === 'Yes';
+      const testPassed = updatedJob.passedTest === 'Yes' || updatedJob.passedTest === true;
+      const qaPassed = updatedJob.passedQa === 'Yes' || updatedJob.passedQa === true;
       const allPassed = allChecks && testPassed && qaPassed;
-      return {
+      targetJob = {
         ...updatedJob,
         status: allPassed && (updatedJob.status === 'Edit' || (updatedJob.status as string) === 'Draft') ? 'Validation Complete' : (updatedJob.status === 'Validation Complete' && !allPassed ? 'Edit' : updatedJob.status),
       };
+      return targetJob;
     });
     setJobs(updated);
     setCached(CACHE_KEYS.JOBS, updated);
-    fetch('/api/registry/jobs/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobs: updated }),
-    }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    if (targetJob) {
+      fetch(`/api/registry/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(targetJob),
+      }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    }
   };
 
   const handleUpdatePassedQa = (jobId: string, passedQa: 'Yes' | 'No', qaDate?: string) => {
+    let targetJob: EngineeringJob | null = null;
     const updated = jobs.map((j) => {
       if (j.id !== jobId) return j;
-      const updatedJob = {
-        ...j,
-        passedQa,
-        passedQaDate: qaDate !== undefined ? qaDate : j.passedQaDate,
-      };
+      const updatedJob = { ...j, passedQa, passedQaDate: qaDate !== undefined ? qaDate : j.passedQaDate };
       const allChecks = Object.values(updatedJob.checks).every(Boolean);
-      const testPassed = updatedJob.passedTest === 'Yes';
-      const qaPassed = updatedJob.passedQa === 'Yes';
+      const testPassed = updatedJob.passedTest === 'Yes' || updatedJob.passedTest === true;
+      const qaPassed = updatedJob.passedQa === 'Yes' || updatedJob.passedQa === true;
       const allPassed = allChecks && testPassed && qaPassed;
-      return {
+      targetJob = {
         ...updatedJob,
         status: allPassed && (updatedJob.status === 'Edit' || (updatedJob.status as string) === 'Draft') ? 'Validation Complete' : (updatedJob.status === 'Validation Complete' && !allPassed ? 'Edit' : updatedJob.status),
       };
+      return targetJob;
     });
     setJobs(updated);
     setCached(CACHE_KEYS.JOBS, updated);
-    fetch('/api/registry/jobs/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobs: updated }),
-    }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    if (targetJob) {
+      fetch(`/api/registry/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(targetJob),
+      }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    }
   };
 
   const handleUpdateJob = (updatedJob: EngineeringJob) => {
     const updated = jobs.map((j) => (j.id === updatedJob.id ? updatedJob : j));
     setJobs(updated);
     setCached(CACHE_KEYS.JOBS, updated);
-    fetch('/api/registry/jobs/batch', {
-      method: 'POST',
+    fetch(`/api/registry/jobs/${encodeURIComponent(updatedJob.id)}`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobs: updated }),
+      body: JSON.stringify(updatedJob),
     }).catch((err) => console.warn('Backend jobs sync failed:', err));
   };
 
   const handleUpdateJobStatus = (jobId: string, status: EngineeringJob['status']) => {
-    const updated = jobs.map((j) => (j.id === jobId ? { ...j, status } : j));
+    let targetJob: EngineeringJob | null = null;
+    const updated = jobs.map((j) => {
+      if (j.id === jobId) {
+        targetJob = { ...j, status };
+        return targetJob;
+      }
+      return j;
+    });
     setJobs(updated);
     setCached(CACHE_KEYS.JOBS, updated);
-    fetch('/api/registry/jobs/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobs: updated }),
-    }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    if (targetJob) {
+      fetch(`/api/registry/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(targetJob),
+      }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    }
   };
 
   const handleUpdateTotalBuildTime = (jobId: string, totalBuildTimeHours: number | string) => {
-    const updated = jobs.map((j) => (j.id === jobId ? { ...j, totalBuildTimeHours } : j));
+    let targetJob: EngineeringJob | null = null;
+    const updated = jobs.map((j) => {
+      if (j.id === jobId) {
+        targetJob = { ...j, totalBuildTimeHours };
+        return targetJob;
+      }
+      return j;
+    });
     setJobs(updated);
     setCached(CACHE_KEYS.JOBS, updated);
-    fetch('/api/registry/jobs/batch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobs: updated }),
-    }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    if (targetJob) {
+      fetch(`/api/registry/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(targetJob),
+      }).catch((err) => console.warn('Backend jobs sync failed:', err));
+    }
   };
 
   // Handlers for Module 4: Asset Maintenance (Persistent via PostgreSQL/JSON)

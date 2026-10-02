@@ -385,45 +385,49 @@ export async function getTraining(): Promise<TrainingRecord[]> {
   return result.recordset;
 }
 
-export async function saveAllTraining(records: TrainingRecord[]): Promise<void> {
+export async function updateSingleTraining(t: TrainingRecord): Promise<TrainingRecord> {
   const pool = await getPool();
-  for (const t of records) {
-    await pool.request()
-      .input('id', sql.NVarChar(64), t.id)
-      .input('operator_name', sql.NVarChar(128), t.operatorName)
-      .input('role', sql.NVarChar(128), t.role || null)
-      .input('certification_title', sql.NVarChar(256), t.certificationTitle)
-      .input('standard_level', sql.NVarChar(64), t.standardLevel || null)
-      .input('issue_date', sql.Date, t.issueDate || null)
-      .input('expiration_date', sql.Date, t.expirationDate || null)
-      .input('status', sql.NVarChar(64), t.status)
-      .input('contact_email', sql.NVarChar(256), t.contactEmail || null)
-      .input('supervisor', sql.NVarChar(128), t.supervisor || null)
-      .input('notes', sql.NVarChar(sql.MAX), t.notes || null)
-      .query(`
-        MERGE TrainingRecords AS target
-        USING (SELECT @id AS id) AS src
-        ON (target.id = src.id)
-        WHEN MATCHED THEN
-          UPDATE SET 
-            operator_name = @operator_name,
-            role = @role,
-            certification_title = @certification_title,
-            standard_level = @standard_level,
-            issue_date = @issue_date,
-            expiration_date = @expiration_date,
-            status = @status,
-            contact_email = @contact_email,
-            supervisor = @supervisor,
-            notes = @notes,
-            updated_at = SYSUTCDATETIME()
-        WHEN NOT MATCHED THEN
-          INSERT (id, operator_name, role, certification_title, standard_level, issue_date, expiration_date, status, contact_email, supervisor, notes)
-          VALUES (@id, @operator_name, @role, @certification_title, @standard_level, @issue_date, @expiration_date, @status, @contact_email, @supervisor, @notes);
-      `);
-  }
+  await pool.request()
+    .input('id', sql.NVarChar(64), t.id)
+    .input('operator_name', sql.NVarChar(128), t.operatorName)
+    .input('role', sql.NVarChar(128), t.role || null)
+    .input('certification_title', sql.NVarChar(256), t.certificationTitle)
+    .input('standard_level', sql.NVarChar(64), t.standardLevel || null)
+    .input('issue_date', sql.Date, t.issueDate || null)
+    .input('expiration_date', sql.Date, t.expirationDate || null)
+    .input('status', sql.NVarChar(64), t.status)
+    .input('contact_email', sql.NVarChar(256), t.contactEmail || null)
+    .input('supervisor', sql.NVarChar(128), t.supervisor || null)
+    .input('notes', sql.NVarChar(sql.MAX), t.notes || null)
+    .query(`
+      MERGE TrainingRecords AS target
+      USING (SELECT @id AS id) AS src
+      ON (target.id = src.id)
+      WHEN MATCHED THEN
+        UPDATE SET 
+          operator_name = @operator_name,
+          role = @role,
+          certification_title = @certification_title,
+          standard_level = @standard_level,
+          issue_date = @issue_date,
+          expiration_date = @expiration_date,
+          status = @status,
+          contact_email = @contact_email,
+          supervisor = @supervisor,
+          notes = @notes,
+          updated_at = SYSUTCDATETIME()
+      WHEN NOT MATCHED THEN
+        INSERT (id, operator_name, role, certification_title, standard_level, issue_date, expiration_date, status, contact_email, supervisor, notes)
+        VALUES (@id, @operator_name, @role, @certification_title, @standard_level, @issue_date, @expiration_date, @status, @contact_email, @supervisor, @notes);
+    `);
+  return t;
 }
 
+export async function saveAllTraining(records: TrainingRecord[]): Promise<void> {
+  for (const t of records) {
+    await updateSingleTraining(t);
+  }
+}
 // -------------------------------------------------------------
 // 6. Engineering Pipeline Jobs (FAI)
 // -------------------------------------------------------------
@@ -461,70 +465,75 @@ export async function getJobs(): Promise<EngineeringJob[]> {
   }));
 }
 
-export async function saveAllJobs(jobs: EngineeringJob[]): Promise<void> {
+export async function updateSingleJob(j: EngineeringJob): Promise<EngineeringJob> {
   const pool = await getPool();
+  await pool.request()
+    .input('id', sql.NVarChar(64), j.id)
+    .input('job_id', sql.NVarChar(64), j.jobId)
+    .input('due_date', sql.Date, j.dueDate || null)
+    .input('project_code', sql.NVarChar(64), j.projectCode || null)
+    .input('customer', sql.NVarChar(128), j.customer || null)
+    .input('quantity', sql.Int, j.quantity || null)
+    .input('assembly_name', sql.NVarChar(256), j.assemblyName || null)
+    .input('part_number', sql.NVarChar(128), j.partNumber || null)
+    .input('revision', sql.NVarChar(32), j.revision || null)
+    .input('target_build_date', sql.Date, j.targetBuildDate || null)
+    .input('start_time', sql.NVarChar(32), j.startTime || null)
+    .input('total_build_time_hours', sql.Float, j.totalBuildTimeHours || null)
+    .input('status', sql.NVarChar(64), j.status)
+    .input('checks', sql.NVarChar(sql.MAX), JSON.stringify(j.checks || {}))
+    .input('passed_test', sql.Bit, j.passedTest ? 1 : 0)
+    .input('passed_test_date', sql.Date, j.passedTestDate || null)
+    .input('passed_qa', sql.Bit, j.passedQa ? 1 : 0)
+    .input('passed_qa_date', sql.Date, j.passedQaDate || null)
+    .input('smt_line', sql.NVarChar(64), j.smtLine || null)
+    .input('notes', sql.NVarChar(sql.MAX), j.notes || null)
+    .query(`
+      MERGE EngineeringJobs AS target
+      USING (SELECT @id AS id) AS src
+      ON (target.id = src.id)
+      WHEN MATCHED THEN
+        UPDATE SET 
+          job_id = @job_id,
+          due_date = @due_date,
+          project_code = @project_code,
+          customer = @customer,
+          quantity = @quantity,
+          assembly_name = @assembly_name,
+          part_number = @part_number,
+          revision = @revision,
+          target_build_date = @target_build_date,
+          start_time = @start_time,
+          total_build_time_hours = @total_build_time_hours,
+          status = @status,
+          checks = @checks,
+          passed_test = @passed_test,
+          passed_test_date = @passed_test_date,
+          passed_qa = @passed_qa,
+          passed_qa_date = @passed_qa_date,
+          smt_line = @smt_line,
+          notes = @notes,
+          updated_at = SYSUTCDATETIME()
+      WHEN NOT MATCHED THEN
+        INSERT (
+          id, job_id, due_date, project_code, customer, quantity,
+          assembly_name, part_number, revision, target_build_date,
+          start_time, total_build_time_hours, status, checks,
+          passed_test, passed_test_date, passed_qa, passed_qa_date,
+          smt_line, notes
+        ) VALUES (
+          @id, @job_id, @due_date, @project_code, @customer, @quantity,
+          @assembly_name, @part_number, @revision, @target_build_date,
+          @start_time, @total_build_time_hours, @status, @checks,
+          @passed_test, @passed_test_date, @passed_qa, @passed_qa_date,
+          @smt_line, @notes
+        );
+    `);
+  return j;
+}
+
+export async function saveAllJobs(jobs: EngineeringJob[]): Promise<void> {
   for (const j of jobs) {
-    await pool.request()
-      .input('id', sql.NVarChar(64), j.id)
-      .input('job_id', sql.NVarChar(64), j.jobId)
-      .input('due_date', sql.Date, j.dueDate || null)
-      .input('project_code', sql.NVarChar(64), j.projectCode || null)
-      .input('customer', sql.NVarChar(128), j.customer || null)
-      .input('quantity', sql.Int, j.quantity || null)
-      .input('assembly_name', sql.NVarChar(256), j.assemblyName || null)
-      .input('part_number', sql.NVarChar(128), j.partNumber || null)
-      .input('revision', sql.NVarChar(32), j.revision || null)
-      .input('target_build_date', sql.Date, j.targetBuildDate || null)
-      .input('start_time', sql.NVarChar(32), j.startTime || null)
-      .input('total_build_time_hours', sql.Float, j.totalBuildTimeHours || null)
-      .input('status', sql.NVarChar(64), j.status)
-      .input('checks', sql.NVarChar(sql.MAX), JSON.stringify(j.checks || {}))
-      .input('passed_test', sql.Bit, j.passedTest ? 1 : 0)
-      .input('passed_test_date', sql.Date, j.passedTestDate || null)
-      .input('passed_qa', sql.Bit, j.passedQa ? 1 : 0)
-      .input('passed_qa_date', sql.Date, j.passedQaDate || null)
-      .input('smt_line', sql.NVarChar(64), j.smtLine || null)
-      .input('notes', sql.NVarChar(sql.MAX), j.notes || null)
-      .query(`
-        MERGE EngineeringJobs AS target
-        USING (SELECT @id AS id) AS src
-        ON (target.id = src.id)
-        WHEN MATCHED THEN
-          UPDATE SET 
-            job_id = @job_id,
-            due_date = @due_date,
-            project_code = @project_code,
-            customer = @customer,
-            quantity = @quantity,
-            assembly_name = @assembly_name,
-            part_number = @part_number,
-            revision = @revision,
-            target_build_date = @target_build_date,
-            start_time = @start_time,
-            total_build_time_hours = @total_build_time_hours,
-            status = @status,
-            checks = @checks,
-            passed_test = @passed_test,
-            passed_test_date = @passed_test_date,
-            passed_qa = @passed_qa,
-            passed_qa_date = @passed_qa_date,
-            smt_line = @smt_line,
-            notes = @notes,
-            updated_at = SYSUTCDATETIME()
-        WHEN NOT MATCHED THEN
-          INSERT (
-            id, job_id, due_date, project_code, customer, quantity,
-            assembly_name, part_number, revision, target_build_date,
-            start_time, total_build_time_hours, status, checks,
-            passed_test, passed_test_date, passed_qa, passed_qa_date,
-            smt_line, notes
-          ) VALUES (
-            @id, @job_id, @due_date, @project_code, @customer, @quantity,
-            @assembly_name, @part_number, @revision, @target_build_date,
-            @start_time, @total_build_time_hours, @status, @checks,
-            @passed_test, @passed_test_date, @passed_qa, @passed_qa_date,
-            @smt_line, @notes
-          );
-      `);
+    await updateSingleJob(j);
   }
 }
