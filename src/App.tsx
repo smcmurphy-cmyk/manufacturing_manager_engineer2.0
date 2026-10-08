@@ -17,6 +17,7 @@ import { QuarterlyReporting } from './components/modules/QuarterlyReporting';
 import { AlertsModal } from './components/modals/AlertsModal';
 import { buildLiveQ3QuarterlyDocuments } from './utils/quarterlyData';
 import { StationKiosk } from './components/modules/StationKiosk';
+
 // Local storage cache keys for zero-latency instant reload
 const CACHE_KEYS = {
   ASSETS: 'QMS_ASSET_REGISTRY_V2',
@@ -47,7 +48,6 @@ export default function App() {
   const [activeModule, setActiveModule] = useState<ActiveModule>('compliance');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; mode: string } | null>(null);
 
   // State for all 4 operational modules initialized with local cache fallback
@@ -74,56 +74,51 @@ export default function App() {
     fetch('/api/registry/assets', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
-        if (data?.assets && Array.isArray(data.assets) && data.assets.length > 0) {
+        if (data?.assets && Array.isArray(data.assets)) {
           setAssets(data.assets);
           setCached(CACHE_KEYS.ASSETS, data.assets);
         }
-      })
-      .catch((err) => console.warn('Using cached assets:', err));
+      });
 
     // 3. Fetch NCRs
     fetch('/api/registry/ncrs', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
-        if (data?.ncrs && Array.isArray(data.ncrs) && data.ncrs.length > 0) {
+        if (data?.ncrs && Array.isArray(data.ncrs)) {
           setNcrs(data.ncrs);
           setCached(CACHE_KEYS.NCRS, data.ncrs);
         }
-      })
-      .catch((err) => console.warn('Using cached NCRs:', err));
+      });
 
     // 4. Fetch Audits
     fetch('/api/registry/audits', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
-        if (data?.audits && Array.isArray(data.audits) && data.audits.length > 0) {
+        if (data?.audits && Array.isArray(data.audits)) {
           setAudits(data.audits);
           setCached(CACHE_KEYS.AUDITS, data.audits);
         }
-      })
-      .catch((err) => console.warn('Using cached audits:', err));
+      });
 
     // 5. Fetch Training
     fetch('/api/registry/training', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
-        if (data?.training && Array.isArray(data.training) && data.training.length > 0) {
+        if (data?.training && Array.isArray(data.training)) {
           setTraining(data.training);
           setCached(CACHE_KEYS.TRAINING, data.training);
         }
-      })
-      .catch((err) => console.warn('Using cached training:', err));
+      });
 
     // 6. Fetch Jobs
     fetch('/api/registry/jobs', fetchOpts)
       .then((res) => res.json())
       .then((data) => {
-        if (data?.jobs && Array.isArray(data.jobs) && data.jobs.length > 0) {
+        if (data?.jobs && Array.isArray(data.jobs)) {
           setJobs(data.jobs);
           setCached(CACHE_KEYS.JOBS, data.jobs);
         }
-      })
-      .catch((err) => console.warn('Using cached jobs:', err));
+      });
   }, []);
 
   // Handlers for Module 1: Compliance
@@ -173,7 +168,6 @@ export default function App() {
       };
       return targetNcr;
     });
-
     setNcrs(updated);
     setCached(CACHE_KEYS.NCRS, updated);
 
@@ -261,12 +255,12 @@ export default function App() {
 
   const handleToggleCheck = (jobId: string, checkKey: keyof EngineeringJob['checks']) => {
     let targetJob: EngineeringJob | null = null;
-    const updated = jobs.map((j) => {
+    const updated = jobs.map((j): EngineeringJob => {
       if (j.id !== jobId) return j;
       const updatedChecks = { ...j.checks, [checkKey]: !j.checks[checkKey] };
       const allChecks = Object.values(updatedChecks).every(Boolean);
-      const testPassed = j.passedTest === 'Yes' || j.passedTest === true;
-      const qaPassed = j.passedQa === 'Yes' || j.passedQa === true;
+      const testPassed = j.passedTest === true;
+      const qaPassed = j.passedQa === true;
       const allPassed = allChecks && testPassed && qaPassed;
       targetJob = {
         ...j,
@@ -286,14 +280,15 @@ export default function App() {
     }
   };
 
-  const handleUpdatePassedTest = (jobId: string, passedTest: 'Yes' | 'No', testDate?: string) => {
+  const handleUpdatePassedTest = (jobId: string, passedTestStr: 'Yes' | 'No', testDate?: string) => {
+    const passedTestBool = passedTestStr === 'Yes';
     let targetJob: EngineeringJob | null = null;
-    const updated = jobs.map((j) => {
+    const updated = jobs.map((j): EngineeringJob => {
       if (j.id !== jobId) return j;
-      const updatedJob = { ...j, passedTest, passedTestDate: testDate !== undefined ? testDate : j.passedTestDate };
+      const updatedJob = { ...j, passedTest: passedTestBool, passedTestDate: testDate !== undefined ? testDate : j.passedTestDate };
       const allChecks = Object.values(updatedJob.checks).every(Boolean);
-      const testPassed = updatedJob.passedTest === 'Yes' || updatedJob.passedTest === true;
-      const qaPassed = updatedJob.passedQa === 'Yes' || updatedJob.passedQa === true;
+      const testPassed = updatedJob.passedTest === true;
+      const qaPassed = updatedJob.passedQa === true;
       const allPassed = allChecks && testPassed && qaPassed;
       targetJob = {
         ...updatedJob,
@@ -312,14 +307,15 @@ export default function App() {
     }
   };
 
-  const handleUpdatePassedQa = (jobId: string, passedQa: 'Yes' | 'No', qaDate?: string) => {
+  const handleUpdatePassedQa = (jobId: string, passedQaStr: 'Yes' | 'No', qaDate?: string) => {
+    const passedQaBool = passedQaStr === 'Yes';
     let targetJob: EngineeringJob | null = null;
-    const updated = jobs.map((j) => {
+    const updated = jobs.map((j): EngineeringJob => {
       if (j.id !== jobId) return j;
-      const updatedJob = { ...j, passedQa, passedQaDate: qaDate !== undefined ? qaDate : j.passedQaDate };
+      const updatedJob = { ...j, passedQa: passedQaBool, passedQaDate: qaDate !== undefined ? qaDate : j.passedQaDate };
       const allChecks = Object.values(updatedJob.checks).every(Boolean);
-      const testPassed = updatedJob.passedTest === 'Yes' || updatedJob.passedTest === true;
-      const qaPassed = updatedJob.passedQa === 'Yes' || updatedJob.passedQa === true;
+      const testPassed = updatedJob.passedTest === true;
+      const qaPassed = updatedJob.passedQa === true;
       const allPassed = allChecks && testPassed && qaPassed;
       targetJob = {
         ...updatedJob,
@@ -413,47 +409,43 @@ export default function App() {
   };
 
   const handleRecalibrateAsset = (id: string) => {
-    const today = new Date('2026-08-30');
-    let calibratedAsset: AssetRecord | null = null;
-    const updated = assets.map((a) => {
-      if (a.id !== id) return a;
-      const nextDue = new Date(today);
-      nextDue.setDate(nextDue.getDate() + a.intervalDays);
-      calibratedAsset = {
-        ...a,
-        lastCompleted: today.toISOString().split('T')[0],
-        nextDueDate: nextDue.toISOString().split('T')[0],
-        status: 'Operational / Calibrated' as const,
-      };
-      return calibratedAsset;
-    });
+  const today = new Date();
+  let calibratedAsset: AssetRecord | null = null;
+  const updated = assets.map((a) => {
+    if (a.id !== id) return a;
+    const nextDue = new Date(today);
+    nextDue.setDate(nextDue.getDate() + (a.intervalDays || 180));
+    calibratedAsset = {
+      ...a,
+      lastCompleted: today.toISOString().split('T')[0],
+      nextDueDate: nextDue.toISOString().split('T')[0],
+      status: 'Operational / Calibrated' as const,
+    };
+    return calibratedAsset;
+  });
+  setAssets(updated);
+  setCached(CACHE_KEYS.ASSETS, updated);
 
-    setAssets(updated);
-    setCached(CACHE_KEYS.ASSETS, updated);
-
-    fetch(`/api/registry/assets/${encodeURIComponent(id)}/calibrate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ calibratedDate: today.toISOString().split('T')[0] }),
-    }).catch((err) => console.warn('Backend asset calibrate failed:', err));
-  };
+  fetch(`/api/registry/assets/${encodeURIComponent(id)}/calibrate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ calibratedDate: today.toISOString().split('T')[0] }),
+  }).catch((err) => console.warn('Backend asset calibrate failed:', err));
+};
 
   // Compute Badge Counters
   const activeNcrCount = ncrs.filter((n) => n.status === 'Open' || n.status === 'In Development').length;
-
-  const today = new Date('2026-08-30');
+  const today = new Date();
   const expiringTrainingCount = training.filter((t) => {
     const diff = Math.ceil((new Date(t.expirationDate).getTime() - today.getTime()) / (1000 * 3600 * 24));
     return diff <= 30;
   }).length;
-
   const activeJobsCount = jobs.length;
 
   const calAlertsCount = assets.filter((a) => {
     const diff = Math.ceil((new Date(a.nextDueDate).getTime() - today.getTime()) / (1000 * 3600 * 24));
     return diff <= 14;
   }).length;
-
   const quarterlyDocsCount = buildLiveQ3QuarterlyDocuments(ncrs, audits, training, jobs, assets).length;
 
   const totalAlertCount = expiringTrainingCount + calAlertsCount;
@@ -480,7 +472,6 @@ export default function App() {
           activeModule={activeModule}
           onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           onOpenAlertModal={() => setIsAlertModalOpen(true)}
-          onExportMarkdown={() => setIsExportModalOpen(true)}
           totalAlertCount={totalAlertCount}
           dbStatus={dbStatus || undefined}
         />

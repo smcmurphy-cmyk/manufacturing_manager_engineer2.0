@@ -485,7 +485,7 @@ export async function updateSingleJob(j: EngineeringJob): Promise<EngineeringJob
     .input('passed_test', sql.Bit, j.passedTest ? 1 : 0)
     .input('passed_test_date', sql.Date, j.passedTestDate || null)
     .input('passed_qa', sql.Bit, j.passedQa ? 1 : 0)
-    .input('passed_qa_date', sql.Date, j.passedQaDate || null)
+    .input('passed_qa_date', sql.Date, j.passedQaDate || null)    
     .input('smt_line', sql.NVarChar(64), j.smtLine || null)
     .input('notes', sql.NVarChar(sql.MAX), j.notes || null)
     .query(`
